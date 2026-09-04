@@ -11,7 +11,20 @@ export class FirebaseAdmin {
       try {
         this.serviceAccount = JSON.parse(serviceAccountJson);
       } catch (e) {
-        throw new Error('Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON');
+        // Fallback: extract using regex if JSON parse fails due to newline corruption
+        const projectIdMatch = serviceAccountJson.match(/"project_id"\s*:\s*"([^"]+)"/);
+        const clientEmailMatch = serviceAccountJson.match(/"client_email"\s*:\s*"([^"]+)"/);
+        const privateKeyMatch = serviceAccountJson.match(/"private_key"\s*:\s*"([^"]+)"/);
+        
+        if (projectIdMatch && clientEmailMatch && privateKeyMatch) {
+          this.serviceAccount = {
+            project_id: projectIdMatch[1],
+            client_email: clientEmailMatch[1],
+            private_key: privateKeyMatch[1].replace(/\\n/g, '\n')
+          };
+        } else {
+          throw new Error('Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON and fallback parsing failed');
+        }
       }
     } else {
       this.serviceAccount = serviceAccountJson;
@@ -71,7 +84,7 @@ export class FirebaseAdmin {
 
   async listUsers(nextPageToken = null, maxResults = 1000) {
     const token = await this.getAccessToken();
-    let url = `https://identitytoolkit.googleapis.com/v3/relyingparty/downloadAccount`;
+    let url = `https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount`;
     
     const body = {
       targetProjectId: this.projectId,

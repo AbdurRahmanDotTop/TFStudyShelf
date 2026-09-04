@@ -198,12 +198,10 @@ const { title = "TF Study Shelf — Admin Panel" } = Astro.props;
       measurementId: "G-CV7CTPNVMC"
     };
     
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-        window.db = firebase.firestore();
-      }
-    });
+    if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+      window.db = firebase.firestore();
+    }
   </script>
 
   <!-- Scripts -->

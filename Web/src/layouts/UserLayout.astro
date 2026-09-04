@@ -131,11 +131,9 @@ const { title = "TF Study Shelf — Read. Learn. Remember." } = Astro.props;
       measurementId: "G-CV7CTPNVMC"
     };
     
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-    });
+    if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
   </script>
 
   <!-- Scripts -->
