@@ -1,0 +1,22 @@
+{
+  "name": "tf-study-shelf-api",
+  "version": "1.0.0",
+  "description": "TF Study Shelf — Cloudflare Workers API Backend",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "deploy:staging": "npx wrangler deploy --env staging",
+    "deploy:production": "npx wrangler deploy --env production",
+    "db:migrate": "npx wrangler d1 execute tf-study-shelf-db --local --file=src/db/schema.sql",
+    "db:seed": "npx wrangler d1 execute tf-study-shelf-db --local --file=src/db/seed.sql",
+    "tail": "npx wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {
+    "jose": "^6.2.10"
+  }
+}

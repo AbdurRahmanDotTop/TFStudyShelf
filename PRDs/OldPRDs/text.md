@@ -1,0 +1,5 @@
+iss ka ek web version bhi dijiye jo ki cloudflare par hosted hoga aur google drive par sabhi pdfs upload hoga means jo bhi contents uploading wala rahega wo sabhi google drive par upload hoga aur videos youtube par upload hoga aur texts baaki cheezein cloudflare ke databases mein save hoga aur hamesha always Free tech stacks hi use hoga aur web version sirf admin ke liye rahega taake admin manage kar sakte sabhi contents ko a to z. chahe kisi bhi tarah kaa contents app mein show ho raha ho sabhi ko aur ad units bhi admin pannel se manage ho sake a to z. abhi aap 2 prd dijiye ek App ke liye aur doosra web app ke liye.
+
+I want ki a to z cheezein admin pannel se manageable ho even jis bhi users kaa admin password change karna chahe kar sake means har ek cheez admin pannel se manageable honga chahiye.
+
+isliye ek web app kaa prd aur ek app kaa prd complete prd dono kaa dijiye

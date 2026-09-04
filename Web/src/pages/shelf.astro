@@ -1,0 +1,28 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — My Shelf">
+  <div class="user-content fade-in">
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-header__title">My Shelf</h1>
+        <p class="admin-page-header__subtitle">Your saved books, highlights, and downloads</p>
+      </div>
+    </div>
+
+    <div class="tabs mb-lg">
+      <span class="tab active" style="cursor:pointer">Saved Books</span>
+      <span class="tab" style="cursor:pointer">Downloads</span>
+      <span class="tab" style="cursor:pointer">Highlights</span>
+      <span class="tab" style="cursor:pointer">Notes</span>
+      <span class="tab" style="cursor:pointer">Bookmarks</span>
+    </div>
+
+    <div class="empty-state">
+      <div class="empty-state__icon">📚</div>
+      <p class="empty-state__title">Your shelf is waiting.</p>
+      <p class="empty-state__message">Save books while browsing and they'll appear here. Sign in to sync across devices.</p>
+      <a class="btn btn-primary" href="/explore" style="text-decoration:none">Explore Books</a>
+    </div>
+  </div>
+</UserLayout>

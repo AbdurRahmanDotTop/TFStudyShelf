@@ -1,0 +1,47 @@
+# TF Study Shelf — Cloudflare Workers Configuration
+# All services use Cloudflare FREE TIER
+
+name = "tf-api"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+account_id = "7abe6eeda9e1fd84d040fdd916ec9d59"
+
+# ─── Development (default) ───────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "tf-study-shelf-db"
+database_id = "056fe993-7662-4533-8407-4db63b36379f"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "e75a778da4974df68993ca797b72af32"
+
+[vars]
+ENVIRONMENT = "development"
+CORS_ORIGIN = "https://tfstudyshelfweb.pages.dev, http://localhost:3000, http://127.0.0.1:3000"
+APP_NAME = "TF Study Shelf"
+PACKAGE_NAME = "com.techilyfly.tfstudyshelf"
+
+# ─── Production ──────────────────────────────────
+[env.production]
+name = "tf-api"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "tf-study-shelf-db"
+database_id = "056fe993-7662-4533-8407-4db63b36379f"
+
+[[env.production.kv_namespaces]]
+binding = "CACHE"
+id = "e75a778da4974df68993ca797b72af32"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+CORS_ORIGIN = "https://tfstudyshelfweb.pages.dev, http://localhost:3000"
+APP_NAME = "TF Study Shelf"
+PACKAGE_NAME = "com.techilyfly.tfstudyshelf"
+
+# Secrets (set via `wrangler secret put`):
+# FIREBASE_SERVICE_ACCOUNT_JSON
+# YOUTUBE_API_KEY
+# ADMOB_SSV_PUBLIC_KEYS

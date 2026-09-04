@@ -1,0 +1,150 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Explore">
+  <div class="user-content fade-in">
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-header__title">Explore</h1>
+        <p class="admin-page-header__subtitle">Discover books, PDFs, and study materials</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="content-toolbar">
+      <div class="content-toolbar__search" style="max-width:480px">
+        <div class="search-bar">
+          <span class="material-symbols-outlined icon">search</span>
+          <input type="text" id="explore-search" placeholder="Search books, topics, questions…">
+        </div>
+      </div>
+      <div class="content-toolbar__filters">
+        <select class="form-input" id="explore-sort" style="width:auto;padding:8px 32px 8px 12px;font-size:13px">
+          <option value="recent">Recently Added</option>
+          <option value="popular">Most Popular</option>
+          <option value="title">Title A-Z</option>
+          <option value="rating">Top Rated</option>
+        </select>
+        <select class="form-input" id="explore-difficulty" style="width:auto;padding:8px 32px 8px 12px;font-size:13px">
+          <option value="">All Difficulty</option>
+          <option value="EASY">Easy</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HARD">Hard</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Category Chips -->
+    <div id="explore-category-chips" class="flex gap-sm mb-lg" style="flex-wrap:wrap;overflow-x:auto">
+      <span class="chip active" data-cat="" style="cursor:pointer">All</span>
+    </div>
+
+    <!-- Results Grid -->
+    <div class="books-grid" id="explore-results">
+      <!-- Skeletons -->
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+    </div>
+
+    <div id="explore-pagination" class="pagination"></div>
+  </div>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (typeof ApiClient === 'undefined') return;
+
+      const urlParams = new URLSearchParams(window.location.search);
+      let exploreState = { 
+        page: 1, 
+        sort: urlParams.get('sort') || 'recent', 
+        difficulty: urlParams.get('difficulty') || '', 
+        category: urlParams.get('category') || '', 
+        search: urlParams.get('search') || '' 
+      };
+
+      if(exploreState.search) document.getElementById('explore-search').value = exploreState.search;
+      if(exploreState.sort) document.getElementById('explore-sort').value = exploreState.sort;
+      if(exploreState.difficulty) document.getElementById('explore-difficulty').value = exploreState.difficulty;
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      function renderGrid(containerId, books) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (books.length === 0) {
+          el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p class="empty-state__title">No books found</p></div>';
+          return;
+        }
+        el.innerHTML = books.map(book => `
+          <a class="book-card" href="/book?id=${book.id}" style="text-decoration:none;color:inherit;display:block">
+            <div class="book-card__cover">
+              ${book.cover_image_url
+                ? '<img src="' + book.cover_image_url + '" alt="' + escapeHtml(book.title) + '" loading="lazy">'
+                : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700">' + book.title[0] + '</div>'
+              }
+            </div>
+            <div class="book-card__title">${escapeHtml(book.title)}</div>
+            <div class="book-card__author">${escapeHtml(book.author)}</div>
+            <div class="book-card__meta">
+              <span>⭐ ${book.rating?.toFixed(1) || '—'}</span>
+              <span>📄 ${book.page_count}</span>
+            </div>
+          </a>
+        `).join('');
+      }
+
+      async function loadData() {
+        try {
+          const result = await ApiClient.getBooks({
+            page: exploreState.page,
+            limit: 20,
+            sort: exploreState.sort,
+            difficulty: exploreState.difficulty || undefined,
+            category: exploreState.category || undefined,
+            search: exploreState.search || undefined
+          });
+          renderGrid('explore-results', result.data || []);
+        } catch(err) {
+          document.getElementById('explore-results').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Error connecting to API server</p></div>';
+        }
+      }
+
+      // Initial Load
+      loadData();
+      
+      // Load Categories
+      ApiClient.getCategories().then(res => {
+        const cats = res.data || [];
+        const container = document.getElementById('explore-category-chips');
+        container.innerHTML = `<span class="chip ${!exploreState.category ? 'active' : ''}" data-cat="" style="cursor:pointer">All</span>` +
+          cats.map(c => `<span class="chip ${exploreState.category === c.id ? 'active' : ''}" data-cat="${c.id}" style="cursor:pointer">${escapeHtml(c.name)}</span>`).join('');
+        
+        container.querySelectorAll('.chip').forEach(chip => {
+          chip.addEventListener('click', (e) => {
+            container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            e.target.classList.add('active');
+            exploreState.category = e.target.getAttribute('data-cat');
+            loadData();
+          });
+        });
+      });
+
+      // Events
+      let searchTimeout;
+      document.getElementById('explore-search')?.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => { exploreState.search = e.target.value; loadData(); }, 400);
+      });
+      document.getElementById('explore-sort')?.addEventListener('change', (e) => { exploreState.sort = e.target.value; loadData(); });
+      document.getElementById('explore-difficulty')?.addEventListener('change', (e) => { exploreState.difficulty = e.target.value; loadData(); });
+
+    });
+  </script>
+</UserLayout>

@@ -1,0 +1,46 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Profile">
+  <div class="user-content fade-in">
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-header__title">Profile</h1>
+        <p class="admin-page-header__subtitle">Account and settings</p>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-lg">
+      <div class="card">
+        <h3 class="text-title-medium mb-md">Account</h3>
+        <div class="empty-state" style="padding:var(--space-lg)">
+          <div class="empty-state__icon">👤</div>
+          <p class="empty-state__title">Sign in to unlock more</p>
+          <p class="empty-state__message">Sign in with your email to sync progress, highlights, and bookmarks across devices.</p>
+          <button class="btn btn-primary">Sign In</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="card mb-md">
+          <h3 class="text-title-medium mb-md">Appearance</h3>
+          <div class="flex items-center justify-between">
+            <span class="text-body-medium">Dark Mode</span>
+            <div class="toggle" id="profile-theme-toggle" onclick="if(window.ThemeManager){ window.ThemeManager.toggle(); this.classList.toggle('active'); }"></div>
+          </div>
+        </div>
+        <div class="card mb-md">
+          <h3 class="text-title-medium mb-md">About</h3>
+          <p class="text-body-medium text-secondary mb-sm">TF Study Shelf v1.0.0</p>
+          <p class="text-body-small text-tertiary">Read. Learn. Remember.<br>© 2020 - {new Date().getFullYear()} Techily Fly. All rights reserved.</p>
+        </div>
+        <div class="card">
+          <h3 class="text-title-medium mb-md">Legal</h3>
+          <a href="#" class="text-body-medium text-accent" style="display:block;padding:8px 0;text-decoration:none">Privacy Policy</a>
+          <a href="#" class="text-body-medium text-accent" style="display:block;padding:8px 0;text-decoration:none">Terms of Use</a>
+          <a href="#" class="text-body-medium text-accent" style="display:block;padding:8px 0;text-decoration:none">Content Rights Policy</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</UserLayout>

@@ -1,0 +1,159 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Book Details">
+  <div class="user-content fade-in" id="book-detail-container">
+    <div class="loading-overlay" style="position:relative;height:300px;background:none"><div class="spinner"></div></div>
+  </div>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (typeof ApiClient === 'undefined') return;
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      const container = document.getElementById('book-detail-container');
+
+      if (!id) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">📚</div>
+            <p class="empty-state__title">Book not found</p>
+            <p class="empty-state__message">Please provide a valid book ID.</p>
+            <a class="btn btn-primary" href="/explore">Browse Library</a>
+          </div>`;
+        return;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      try {
+        const [bookResult, qnaResult] = await Promise.all([
+          ApiClient.getBook(id),
+          ApiClient.getQuestions(id).catch(() => ({ data: [] }))
+        ]);
+        const book = bookResult.data;
+        const qnas = qnaResult.data || [];
+
+        // Update document title for better SEO when rendering clientside
+        document.title = `${book.title} — TF Study Shelf`;
+
+        container.innerHTML = `
+          <div class="book-detail fade-in">
+            <div class="book-detail__header">
+              <div class="book-detail__cover">
+                ${book.cover_image_url
+                  ? '<img src="' + book.cover_image_url + '" alt="' + escapeHtml(book.title) + '">'
+                  : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:36px;font-weight:700">' + book.title[0] + '</div>'
+                }
+              </div>
+              <div class="book-detail__info">
+                <h1 class="book-detail__title">${escapeHtml(book.title)}</h1>
+                <p class="book-detail__author">by ${escapeHtml(book.author)}</p>
+                <div class="book-detail__meta">
+                  <span>⭐ ${book.rating?.toFixed(1) || '—'}</span>
+                  <span>📄 ${book.page_count} pages</span>
+                  <span>⏱ ${Math.floor((book.estimated_read_time_minutes || 0) / 60)}h ${(book.estimated_read_time_minutes || 0) % 60}m</span>
+                  <span class="chip" style="font-size:11px;padding:3px 8px">${book.difficulty}</span>
+                </div>
+                <div class="flex gap-sm mt-sm" style="flex-wrap:wrap">
+                  ${(book.categories || []).map(c => '<span class="chip chip-outline" style="font-size:11px">' + c.name + '</span>').join('')}
+                </div>
+                <div class="book-detail__actions">
+                  <a class="btn btn-gradient btn-lg" href="/read?url=${encodeURIComponent(book.url || '')}&title=${encodeURIComponent(book.title)}" ${!book.url ? 'disabled style="pointer-events:none;opacity:0.5"' : ''} style="text-decoration:none">
+                    <span class="material-symbols-outlined" style="font-size:20px">auto_stories</span> Read Now
+                  </a>
+                  <button class="btn btn-secondary">
+                    <span class="material-symbols-outlined" style="font-size:18px">favorite_border</span> Save
+                  </button>
+                  ${book.allowed_download ? 
+                    '<button class="btn btn-secondary"><span class="material-symbols-outlined" style="font-size:18px">download</span> PDF</button>'
+                   : ''}
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-lg">
+              <h3 class="text-title-medium mb-sm">Description</h3>
+              <p class="book-detail__description" style="margin-bottom:0">${escapeHtml(book.description)}</p>
+            </div>
+
+            <div class="card card-accent mb-lg" style="padding:12px 16px">
+              <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">verified</span>
+                <span class="text-body-small">Rights: <strong>${(book.rights_status || '').replace('_', ' ')}</strong>
+                  ${book.license_name ? ' • License: ' + book.license_name : ''}
+                </span>
+              </div>
+            </div>
+
+            <div class="grid-3 gap-md mb-lg">
+              <div class="stat-card text-center">
+                <div class="stat-card__value" style="color:var(--accent)">${book.questionsCount || 0}</div>
+                <div class="stat-card__label">Questions</div>
+              </div>
+              <div class="stat-card text-center">
+                <div class="stat-card__value" style="color:var(--accent)">${book.quizzesCount || 0}</div>
+                <div class="stat-card__label">Quizzes</div>
+              </div>
+              <div class="stat-card text-center">
+                <div class="stat-card__value" style="color:var(--accent)">${book.flashcardSetsCount || 0}</div>
+                <div class="stat-card__label">Flashcard Sets</div>
+              </div>
+            </div>
+
+            ${book.chapters?.length ? 
+              '<div class="card" style="padding:0; margin-bottom:var(--space-lg);">' +
+                '<div style="padding:var(--space-md) var(--space-lg);border-bottom:1px solid var(--border)">' +
+                  '<h3 class="text-title-medium">Chapters (' + book.chapters.length + ')</h3>' +
+                '</div>' +
+                '<div class="chapter-list">' +
+                  book.chapters.map(ch => 
+                    '<div class="chapter-item">' +
+                      '<div class="chapter-item__number">Chapter ' + ch.chapter_number + '</div>' +
+                      '<div class="chapter-item__title">' + escapeHtml(ch.title) + '</div>' +
+                      '<div class="chapter-item__meta">' +
+                        (ch.summary ? '<span>📝 Has summary</span>' : '') +
+                        (ch.questionsCount ? '<span>❓ ' + ch.questionsCount + ' questions</span>' : '') +
+                        (ch.word_count ? '<span>📄 ' + ch.word_count + ' words</span>' : '') +
+                      '</div>' +
+                    '</div>'
+                  ).join('') +
+                '</div>' +
+              '</div>'
+             : ''}
+
+            ${qnas.length > 0 ? 
+              '<div class="card" style="padding:0">' +
+                '<div style="padding:var(--space-md) var(--space-lg);border-bottom:1px solid var(--border)">' +
+                  '<h3 class="text-title-medium">Questions & Answers</h3>' +
+                '</div>' +
+                '<div style="padding:var(--space-md) var(--space-lg)">' +
+                  qnas.map(q => 
+                    '<div style="margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:16px;">' +
+                      '<div class="text-body-medium" style="font-weight:600; color:var(--text-primary); margin-bottom:4px;">Q: ' + escapeHtml(q.question) + '</div>' +
+                      '<div class="text-body-small" style="color:var(--text-secondary);">A: ' + escapeHtml(q.answer) + '</div>' +
+                    '</div>'
+                  ).join('') +
+                '</div>' +
+              '</div>'
+             : ''}
+          </div>
+        `;
+      } catch (err) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">📚</div>
+            <p class="empty-state__title">Book not found</p>
+            <p class="empty-state__message">${err.message}</p>
+            <a class="btn btn-primary" href="/explore">Browse Library</a>
+          </div>`;
+      }
+    });
+  </script>
+</UserLayout>

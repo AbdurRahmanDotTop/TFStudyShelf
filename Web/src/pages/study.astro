@@ -1,0 +1,73 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Study Hub">
+  <div class="user-content fade-in">
+    <div class="admin-page-header">
+      <div>
+        <h1 class="admin-page-header__title">Study Hub</h1>
+        <p class="admin-page-header__subtitle">Your study tools and progress</p>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-lg mb-xl">
+      <div class="card card-hover" style="cursor:pointer">
+        <div class="flex items-center gap-md mb-md">
+          <div class="stat-card__icon" style="width:48px;height:48px">
+            <span class="material-symbols-outlined" style="font-size:24px">quiz</span>
+          </div>
+          <div>
+            <div class="text-title-large">Quizzes</div>
+            <div class="text-body-small text-secondary">Test your knowledge with multiple-choice quizzes from your books</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-full">Start Quiz</button>
+      </div>
+      <div class="card card-hover" style="cursor:pointer">
+        <div class="flex items-center gap-md mb-md">
+          <div class="stat-card__icon" style="width:48px;height:48px">
+            <span class="material-symbols-outlined" style="font-size:24px">style</span>
+          </div>
+          <div>
+            <div class="text-title-large">Flashcards</div>
+            <div class="text-body-small text-secondary">Review key concepts with spaced-repetition flashcards</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-full">Study Cards</button>
+      </div>
+      <div class="card card-hover" style="cursor:pointer">
+        <div class="flex items-center gap-md mb-md">
+          <div class="stat-card__icon" style="width:48px;height:48px">
+            <span class="material-symbols-outlined" style="font-size:24px">help_outline</span>
+          </div>
+          <div>
+            <div class="text-title-large">Q&A</div>
+            <div class="text-body-small text-secondary">Browse and study questions and answers for every chapter</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-full">Browse Q&A</button>
+      </div>
+      <div class="card card-hover" style="cursor:pointer">
+        <div class="flex items-center gap-md mb-md">
+          <div class="stat-card__icon" style="width:48px;height:48px">
+            <span class="material-symbols-outlined" style="font-size:24px">psychology</span>
+          </div>
+          <div>
+            <div class="text-title-large">Revision Center</div>
+            <div class="text-body-small text-secondary">Review highlighted and saved concepts across all your books</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-full">Open Revision</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="empty-state">
+        <div class="empty-state__icon">🎯</div>
+        <p class="empty-state__title">Start studying to see your progress</p>
+        <p class="empty-state__message">Take quizzes, review flashcards, and answer questions to build your study statistics.</p>
+        <a class="btn btn-primary" href="/explore" style="text-decoration:none">Find Study Material</a>
+      </div>
+    </div>
+  </div>
+</UserLayout>

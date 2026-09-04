@@ -1,0 +1,14 @@
+/keystore/
+/private/
+node_modules/
+python-env/
+Web/dist/
+Web/.astro/
+Web/workers/node_modules/
+Web/node_modules/
+.claude/
+.agents/
+release/
+.wrangler/
+JSON files/
+"JSON files/"

@@ -1,0 +1,50 @@
+#!/bin/sh
+# Quality gate — blocks a push if the site's tests fail, so a broken build
+# never reaches the deploy branch. This is the local enforcement of the
+# test-driven contract (CI in .github/workflows/ runs the same checks).
+#
+# Wired automatically by the "prepare" script in package.json (npm install sets
+# core.hooksPath to scripts/hooks). The `check_seo.py` step runs only if that
+# file exists, so this same hook works whether SEO is a Python gate or seo.spec.ts.
+#
+# Relax for ONE push:   git push --no-verify
+# Disable entirely:     git config --unset core.hooksPath
+#
+set -e
+
+# OPTIONAL: PR-only main flow. If this repo's convention is that new commits
+# reach main only via reviewed PRs (typical when several people or parallel AI
+# agents share the checkout), uncomment the block below to reject direct
+# pushes to main. Ship flows pushing main:production are unaffected; GitHub
+# PR merges happen server-side, so they're unaffected too. Deliberate exception:
+# ALLOW_MAIN_PUSH=1 git push ...
+# (Must stay ABOVE the build/test steps: it consumes the hook's stdin.)
+#
+# while read -r _lref _lsha remote_ref _rsha; do
+#   if [ "$remote_ref" = "refs/heads/main" ] && [ "${ALLOW_MAIN_PUSH:-0}" != "1" ]; then
+#     echo "✗ Direct push to 'main' blocked — open a PR instead (ALLOW_MAIN_PUSH=1 to override)." >&2
+#     exit 1
+#   fi
+# done
+
+# First, because it needs neither the build nor a browser nor the network: it drives
+# scripts/ship.sh against a stubbed git and checks that a failed publish is diagnosed
+# correctly. Nothing else exercises that script — its only other workout is an actual
+# publish, when a wrong message is most expensive.
+if [ -f tests/check_ship_push.sh ]; then
+  echo "▶ pre-push gate: publish classifier…"
+  bash tests/check_ship_push.sh
+fi
+
+echo "▶ pre-push gate: building…"
+npm run build
+
+if [ -f tests/check_seo.py ]; then
+  echo "▶ pre-push gate: SEO checks…"
+  python3 tests/check_seo.py
+fi
+
+echo "▶ pre-push gate: tests…"
+npm test
+
+echo "✓ pre-push gate passed — pushing."

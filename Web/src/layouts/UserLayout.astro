@@ -1,0 +1,164 @@
+---
+const { title = "TF Study Shelf — Read. Learn. Remember." } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title}</title>
+  <meta name="description" content="TF Study Shelf is a free digital library and study companion. Read books, PDFs, take quizzes, use flashcards, and study smarter — completely free.">
+  <meta name="keywords" content="free books, digital library, study app, quizzes, flashcards, PDF reader, education, exam preparation">
+  <meta name="author" content="Techily Fly">
+  <meta name="theme-color" content="#FF7759">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TF Study Shelf — Read. Learn. Remember.">
+  <meta property="og:description" content="Free digital library and study companion. Books, PDFs, quizzes, flashcards — all in one place.">
+  <meta property="og:site_name" content="TF Study Shelf">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23FF7759'/%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' dominant-baseline='middle' font-family='sans-serif' font-weight='700' font-size='14' fill='white'%3ETF%3C/text%3E%3C/svg%3E">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/css/design-tokens.css">
+  <link rel="stylesheet" href="/css/reset.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/user/user-layout.css">
+
+  <!-- Material Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "TF Study Shelf",
+    "url": "https://tf-study-shelf.pages.dev",
+    "description": "Free digital library and study companion",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://tf-study-shelf.pages.dev/?search={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ═══ Top Navigation ═════════════════════════════════════ -->
+  <header class="user-topbar" role="banner" id="site-header">
+    <a href="/" class="user-topbar__logo" aria-label="TF Study Shelf Home" style="text-decoration:none">
+      <div class="user-topbar__logo-mark">TF</div>
+      <span class="user-topbar__logo-text hide-mobile">TF Study Shelf</span>
+    </a>
+
+    <div class="user-topbar__center hide-mobile">
+      <div class="search-bar" id="global-search-bar">
+        <span class="material-symbols-outlined icon">search</span>
+        <input type="text" id="global-search" placeholder="Search books, topics, questions…" aria-label="Search">
+      </div>
+    </div>
+
+    <div class="user-topbar__right">
+      <button class="btn-icon hide-desktop" onclick="document.getElementById('global-search-bar').classList.toggle('hidden')" aria-label="Search">
+        <span class="material-symbols-outlined">search</span>
+      </button>
+      <button class="btn-icon" id="theme-toggle" title="Toggle theme" aria-label="Toggle dark mode">
+        <span class="material-symbols-outlined">dark_mode</span>
+      </button>
+      <a class="user-topbar__link hide-mobile" href="/admin">Admin</a>
+    </div>
+  </header>
+
+  <!-- ═══ Main Content ═══════════════════════════════════════ -->
+  <main class="user-main" id="user-main-content" role="main">
+    <slot />
+  </main>
+
+  <!-- ═══ Footer ═════════════════════════════════════════════ -->
+  <footer class="user-footer" role="contentinfo" id="site-footer">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <div class="footer-brand__name">TF Study Shelf</div>
+        <p class="footer-brand__tagline">Read. Learn. Remember. A free digital library and study companion for everyone.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-links__title">Explore</div>
+        <a href="/explore">Browse Books</a>
+        <a href="/explore?tab=subjects">Subjects</a>
+        <a href="/study">Study Tools</a>
+      </div>
+      <div class="footer-links">
+        <div class="footer-links__title">Product</div>
+        <a href="#">About</a>
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Use</a>
+        <a href="#">Content Rights</a>
+      </div>
+      <div class="footer-links">
+        <div class="footer-links__title">Connect</div>
+        <a href="#">Contact</a>
+        <a href="#">Report Issue</a>
+        <a href="/admin">Admin Panel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2020 - {new Date().getFullYear()} Techily Fly. All rights reserved.</span>
+      <span>Built with ❤️ for learners everywhere.</span>
+    </div>
+  </footer>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Firebase SDKs -->
+  <script is:inline src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script is:inline src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script is:inline src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  
+  <script is:inline>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBPrR9vg5_b_jqwWDPGD0mXC5NsWWfk6hU",
+      authDomain: "tf-study-shelf.firebaseapp.com",
+      projectId: "tf-study-shelf",
+      storageBucket: "tf-study-shelf.firebasestorage.app",
+      messagingSenderId: "56578777667",
+      appId: "1:56578777667:web:12172da5fd1bb6c43b2af6",
+      measurementId: "G-CV7CTPNVMC"
+    };
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+    });
+  </script>
+
+  <!-- Scripts -->
+  <script src="/js/utils/storage.js" is:inline></script>
+  <script src="/js/utils/theme.js" is:inline></script>
+  <script src="/js/api/client.js" is:inline></script>
+  <script src="/js/components/toast.js" is:inline></script>
+  
+  <!-- Global Search behavior -->
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Theme init
+      if (window.ThemeManager) window.ThemeManager.init();
+
+      // Search init
+      const input = document.getElementById('global-search');
+      let timeout;
+      input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && input.value.trim()) {
+          window.location.href = '/explore?search=' + encodeURIComponent(input.value.trim());
+        }
+      });
+    });
+  </script>
+</body>
+</html>

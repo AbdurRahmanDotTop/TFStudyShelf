@@ -1,0 +1,21 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+<AdminLayout title="Chapters — Admin Panel">
+  <div id="admin-page-content-inner"></div>
+  
+  <script is:inline src="/js/pages/admin/chapters.js"></script>
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const checkAuth = setInterval(() => {
+        if (typeof ApiClient !== 'undefined' && ApiClient.getAuthToken()) {
+          clearInterval(checkAuth);
+          if (window.AdminChapters) {
+            AdminChapters.render(document.getElementById('admin-page-content-inner'));
+          }
+        }
+      }, 100);
+      setTimeout(() => clearInterval(checkAuth), 5000);
+    });
+  </script>
+</AdminLayout>

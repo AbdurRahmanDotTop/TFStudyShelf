@@ -1,0 +1,159 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Home">
+  <div class="user-content fade-in">
+    <!-- Hero Section -->
+    <div class="hero">
+      <h1 class="hero__title" id="greeting-title">Welcome 👋</h1>
+      <p class="hero__subtitle">Your free digital library and study companion. Read books, solve quizzes, and study smarter — all in one place.</p>
+      <div class="hero__actions">
+        <a class="btn btn-primary btn-lg" href="/explore" style="background:#ffffff;color:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,0.1)">
+          <span class="material-symbols-outlined" style="font-size:20px">explore</span> Explore Library
+        </a>
+        <a class="btn btn-secondary btn-lg" href="/study" style="border-color:rgba(255,255,255,0.4);color:#ffffff;background:rgba(255,255,255,0.1);backdrop-filter:blur(8px)">
+          <span class="material-symbols-outlined" style="font-size:20px">school</span> Start Studying
+        </a>
+      </div>
+    </div>
+
+    <!-- Browse Categories -->
+    <div class="section-header mt-xl">
+      <h2 class="section-title">Browse</h2>
+      <a class="section-link" href="/explore">
+        View all <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span>
+      </a>
+    </div>
+    <div class="category-rail" id="category-rail">
+      <!-- Skeletons -->
+      <div class="category-rail__item"><div class="skeleton" style="width:32px;height:32px;border-radius:50%"></div><div class="skeleton" style="width:50px;height:12px"></div></div>
+      <div class="category-rail__item"><div class="skeleton" style="width:32px;height:32px;border-radius:50%"></div><div class="skeleton" style="width:50px;height:12px"></div></div>
+      <div class="category-rail__item"><div class="skeleton" style="width:32px;height:32px;border-radius:50%"></div><div class="skeleton" style="width:50px;height:12px"></div></div>
+      <div class="category-rail__item"><div class="skeleton" style="width:32px;height:32px;border-radius:50%"></div><div class="skeleton" style="width:50px;height:12px"></div></div>
+    </div>
+
+    <!-- Featured Books -->
+    <div class="section-header mt-xl">
+      <h2 class="section-title">Featured Books</h2>
+      <a class="section-link" href="/explore">
+        See all <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span>
+      </a>
+    </div>
+    <div class="books-grid" id="featured-books">
+      <!-- Skeletons -->
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+    </div>
+
+    <!-- Study Section -->
+    <div class="section-header mt-xl">
+      <h2 class="section-title">Study Tools</h2>
+    </div>
+    <div class="grid-4 gap-md" style="margin-bottom:var(--space-xl)">
+      <a href="/study" class="card card-hover" style="text-align:center;padding:var(--space-xl) var(--space-md);text-decoration:none;display:block">
+        <div style="font-size:32px;margin-bottom:var(--space-sm)"><span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">quiz</span></div>
+        <div class="text-title-medium" style="color:var(--text-primary)">Quizzes</div>
+        <div class="text-body-small text-secondary mt-xs">Test your knowledge</div>
+      </a>
+      <a href="/study" class="card card-hover" style="text-align:center;padding:var(--space-xl) var(--space-md);text-decoration:none;display:block">
+        <div style="font-size:32px;margin-bottom:var(--space-sm)"><span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">style</span></div>
+        <div class="text-title-medium" style="color:var(--text-primary)">Flashcards</div>
+        <div class="text-body-small text-secondary mt-xs">Review key concepts</div>
+      </a>
+      <a href="/study" class="card card-hover" style="text-align:center;padding:var(--space-xl) var(--space-md);text-decoration:none;display:block">
+        <div style="font-size:32px;margin-bottom:var(--space-sm)"><span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">help_outline</span></div>
+        <div class="text-title-medium" style="color:var(--text-primary)">Q&A</div>
+        <div class="text-body-small text-secondary mt-xs">Questions & Answers</div>
+      </a>
+      <a href="/explore" class="card card-hover" style="text-align:center;padding:var(--space-xl) var(--space-md);text-decoration:none;display:block">
+        <div style="font-size:32px;margin-bottom:var(--space-sm)"><span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">auto_stories</span></div>
+        <div class="text-title-medium" style="color:var(--text-primary)">Study Packs</div>
+        <div class="text-body-small text-secondary mt-xs">Curated learning paths</div>
+      </a>
+    </div>
+
+    <!-- Recently Added -->
+    <div class="section-header mt-xl">
+      <h2 class="section-title">Recently Added</h2>
+    </div>
+    <div class="books-grid" id="recent-books">
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+    </div>
+  </div>
+
+  <script is:inline>
+    // Page specific logic
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Set greeting
+      const hour = new Date().getHours();
+      let greeting = 'Good night';
+      if (hour < 12) greeting = 'Good morning';
+      else if (hour < 17) greeting = 'Good afternoon';
+      else if (hour < 21) greeting = 'Good evening';
+      document.getElementById('greeting-title').textContent = greeting + ' 👋';
+
+      // Ensure API is loaded
+      if (typeof ApiClient === 'undefined') return;
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      function renderGrid(containerId, books) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (books.length === 0) {
+          el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p class="empty-state__title">No books found</p></div>';
+          return;
+        }
+        el.innerHTML = books.map(book => `
+          <a class="book-card" href="/book?id=${book.id}" style="text-decoration:none;color:inherit;display:block">
+            <div class="book-card__cover">
+              ${book.cover_image_url
+                ? '<img src="' + book.cover_image_url + '" alt="' + escapeHtml(book.title) + '" loading="lazy">'
+                : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700">' + book.title[0] + '</div>'
+              }
+            </div>
+            <div class="book-card__title">${escapeHtml(book.title)}</div>
+            <div class="book-card__author">${escapeHtml(book.author)}</div>
+            <div class="book-card__meta">
+              <span>⭐ ${book.rating?.toFixed(1) || '—'}</span>
+              <span>📄 ${book.page_count}</span>
+            </div>
+          </a>
+        `).join('');
+      }
+
+      try {
+        const catResult = await ApiClient.getCategories();
+        const cats = catResult.data || [];
+        const catIcons = ['📚', '🔬', '📐', '🌍', '💻', '🎨', '📖', '🧪', '🏛️', '🔢'];
+        document.getElementById('category-rail').innerHTML = cats.length
+          ? cats.map((c, i) => `
+            <a class="category-rail__item" href="/explore?category=${c.id}" style="text-decoration:none;color:inherit;display:flex">
+              <div class="category-rail__icon">${catIcons[i % catIcons.length]}</div>
+              <div class="category-rail__name">${c.name}</div>
+            </a>
+          `).join('')
+          : '<div class="text-body-medium text-secondary" style="padding:var(--space-lg)">No categories yet.</div>';
+
+        const featuredResult = await ApiClient.getBooks({ featured: 'true', limit: 8 });
+        renderGrid('featured-books', featuredResult.data || []);
+
+        const recentResult = await ApiClient.getBooks({ sort: 'recent', limit: 4 });
+        renderGrid('recent-books', recentResult.data || []);
+      } catch (err) {
+        document.getElementById('featured-books').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Error connecting to API server</p></div>';
+        document.getElementById('recent-books').innerHTML = '';
+      }
+    });
+  </script>
+</UserLayout>

@@ -1,0 +1,6 @@
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "C:/Users/TechilyFly/OneDrive/Desktop/Abdurrahman/Abdurrahman_Developer/Techily_Fly/Techily_Fly_Apps/TF_Study_Shelf/logo/TF Study Shelf Logo 1 white bg.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "C:/Users/TechilyFly/OneDrive/Desktop/Abdurrahman/Abdurrahman_Developer/Techily_Fly/Techily_Fly_Apps/TF_Study_Shelf/logo/TF Study Shelf Logo 1 white bg.png"

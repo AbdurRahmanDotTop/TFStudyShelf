@@ -1,0 +1,29 @@
+{
+  "name": "tf-study-shelf-web",
+  "version": "1.0.0",
+  "description": "TF Study Shelf — Web Platform (Admin CMS + User-Facing Portal)",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:workers\"",
+    "dev:frontend": "astro dev",
+    "dev:workers": "cd workers && npx wrangler dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "lint": "npx eslint src/",
+    "deploy:staging": "npm run build && npx wrangler pages deploy dist/client --project-name tfstudyshelfweb",
+    "deploy:production": "npm run build && npx wrangler pages deploy dist/client --project-name tfstudyshelfweb --branch main",
+    "db:migrate": "cd workers && npx wrangler d1 execute tf-study-shelf-db --file=src/db/schema.sql",
+    "db:migrate:staging": "cd workers && npx wrangler d1 execute tf-study-shelf-db-staging --file=src/db/schema.sql",
+    "db:seed": "cd workers && npx wrangler d1 execute tf-study-shelf-db --file=src/db/seed.sql"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "concurrently": "^8.2.0",
+    "eslint": "^9.0.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.3.0",
+    "astro": "^7.3.1"
+  }
+}

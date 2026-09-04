@@ -1,0 +1,4 @@
+storePassword=placeholder_password
+keyPassword=placeholder_password
+keyAlias=upload
+storeFile=../upload-keystore.jks

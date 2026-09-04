@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "151064349456",
+    "project_id": "tf-study-shelf-b1a08",
+    "storage_bucket": "tf-study-shelf-b1a08.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:151064349456:android:861b5284f491fd684cf395",
+        "android_client_info": {
+          "package_name": "com.techilyfly.tfstudyshelf"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkMl7a5G3jTRSU06SL-QplpwQ62frCZUw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
