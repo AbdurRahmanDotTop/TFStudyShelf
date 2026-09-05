@@ -340,6 +340,7 @@ class FirestoreBook {
         title: title,
         author: author,
         description: description,
+        coverUrl: url,
         totalPages: pages,
         categoryId: category,
         createdAt: createdAt ?? DateTime.now(),

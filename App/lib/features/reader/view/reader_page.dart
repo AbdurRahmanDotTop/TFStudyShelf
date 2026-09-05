@@ -6,6 +6,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/book.dart';
 import '../../../core/models/content_models.dart';
+import '../../../core/models/firestore_service.dart';
 import '../../../core/widgets/ad_banner_widget.dart';
 
 /// In-App Book Reader — chapter text with font/spacing controls

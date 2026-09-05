@@ -5,6 +5,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/firestore_service.dart';
 import '../../../core/widgets/ad_banner_widget.dart';
+import '../../../core/widgets/firestore_book_cover.dart';
 
 /// Explore Page — Real Firestore books, live search & filter
 class ExplorePage extends StatefulWidget {
@@ -306,18 +307,13 @@ class _BookGridCard extends StatelessWidget {
           children: [
             // Cover
             Expanded(
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: AppColors.gradientPrimary,
+                child: FirestoreBookCover(
+                  book: book,
+                  fontSize: 44,
                   borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(AppTheme.radiusMd)),
-                ),
-                child: Center(
-                  child: Text(
-                    book.emoji ?? book.title[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 44),
-                  ),
                 ),
               ),
             ),
@@ -391,18 +387,13 @@ class _BookListCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 56,
               height: 72,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientPrimary,
+              child: FirestoreBookCover(
+                book: book,
+                fontSize: 26,
                 borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-              ),
-              child: Center(
-                child: Text(
-                  book.emoji ?? book.title[0].toUpperCase(),
-                  style: const TextStyle(fontSize: 26),
-                ),
               ),
             ),
             const SizedBox(width: AppTheme.spaceMd),

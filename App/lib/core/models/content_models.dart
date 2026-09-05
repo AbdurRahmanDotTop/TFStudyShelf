@@ -1,4 +1,6 @@
 /// TF Study Shelf — Chapter, Question, Quiz, Flashcard Models
+import 'dart:convert';
+import 'content_block.dart';
 
 // ─── Chapter ─────────────────────────────────────────
 class Chapter {
@@ -9,6 +11,16 @@ class Chapter {
   final String? content;
   final int wordCount;
   final int estimatedMinutes;
+
+  List<ContentBlock> get parsedContent {
+    if (content == null || content!.isEmpty) return [];
+    try {
+      final List<dynamic> jsonList = jsonDecode(content!);
+      return jsonList.map((e) => ContentBlock.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
 
   const Chapter({
     required this.id,

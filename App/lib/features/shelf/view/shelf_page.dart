@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/firestore_service.dart';
+import '../../../core/widgets/firestore_book_cover.dart';
 
 /// Shelf Page — Real Firestore saved books + reading progress
 class ShelfPage extends StatefulWidget {
@@ -213,18 +214,13 @@ class _ShelfPageState extends State<ShelfPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Container(
+                  child: SizedBox(
                     width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.gradientPrimary,
+                    child: FirestoreBookCover(
+                      book: book,
+                      fontSize: 44,
                       borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(AppTheme.radiusMd)),
-                    ),
-                    child: Center(
-                      child: Text(
-                        book.emoji ?? book.title[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 44),
-                      ),
                     ),
                   ),
                 ),
@@ -279,18 +275,13 @@ class _ProgressCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 56,
               height: 72,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientPrimary,
+              child: FirestoreBookCover(
+                book: book,
+                fontSize: 26,
                 borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-              ),
-              child: Center(
-                child: Text(
-                  book.emoji ?? book.title[0].toUpperCase(),
-                  style: const TextStyle(fontSize: 26),
-                ),
               ),
             ),
             const SizedBox(width: AppTheme.spaceMd),

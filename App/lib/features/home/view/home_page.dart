@@ -6,6 +6,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/firestore_service.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/firestore_book_cover.dart';
 import '../../../core/widgets/ad_banner_widget.dart';
 
 /// Home Page — Real Firestore data, live streams
@@ -358,21 +359,13 @@ class _ContinueReadingCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppTheme.spaceMd),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: 56,
                 height: 72,
-                decoration: BoxDecoration(
-                  gradient: AppColors.gradientPrimary,
+                child: FirestoreBookCover(
+                  book: book,
+                  fontSize: 24,
                   borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                ),
-                child: Center(
-                  child: Text(
-                    book.emoji ?? book.title[0],
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800),
-                  ),
                 ),
               ),
               const SizedBox(width: AppTheme.spaceMd),
@@ -475,18 +468,13 @@ class _BookThumbnail extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
+            SizedBox(
               height: 150,
               width: 130,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientPrimary,
+              child: FirestoreBookCover(
+                book: book,
+                fontSize: 40,
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              ),
-              child: Center(
-                child: Text(
-                  book.emoji ?? book.title[0].toUpperCase(),
-                  style: const TextStyle(fontSize: 40),
-                ),
               ),
             ),
             const SizedBox(height: 6),

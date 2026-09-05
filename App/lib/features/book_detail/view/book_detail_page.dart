@@ -6,9 +6,11 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/firestore_service.dart';
 import '../../../core/models/book_qna.dart';
+import 'dart:convert';
 import '../../../core/services/download_service.dart';
 import '../../../core/services/network_service.dart';
 import '../../../core/services/ad_service.dart';
+import '../../../core/network/api_service.dart';
 
 /// Book Detail Page — Real Firestore data, save to shelf, reading progress
 class BookDetailPage extends StatefulWidget {
@@ -77,38 +79,145 @@ class _BookDetailPageState extends State<BookDetailPage> {
         duration: const Duration(seconds: 2),
       ));
     }
-  }
+  bool _hasStructuredContent = false;
+  List<dynamic> _fetchedChapters = [];
 
   Future<void> _openBook() async {
-    if (_book?.pdfDriveId == null || _book!.pdfDriveId!.isEmpty) {
+    setState(() => _isDownloading = true);
+    
+    // Check if we have structured chapters first
+    try {
+      final res = await ApiService().getChapters(widget.bookId);
+      if (res.statusCode == 200 && (res.data as List).isNotEmpty) {
+        _hasStructuredContent = true;
+        _fetchedChapters = res.data;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    
+    if (mounted) setState(() => _isDownloading = false);
+
+    if (!_hasStructuredContent && (_book?.pdfDriveId == null || _book!.pdfDriveId!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('⚠️ No PDF link available for this book')));
+          content: Text('⚠️ No content or PDF link available for this book')));
       return;
     }
 
-    // Check offline entitlement first
-    final downloadedPath = await DownloadService.instance.getDownloadedPdfPath(widget.bookId);
-    if (downloadedPath != null) {
-      _startReading(downloadedPath);
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Read Book'),
+          content: const Text('Do you want to read online or offline?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(c);
+                _handleOnlineReading();
+              },
+              child: const Text('Online'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(c);
+                _handleOfflineReading();
+              },
+              child: const Text('Offline'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleOnlineReading() async {
+    final hasInternet = await NetworkService.instance.isConnected();
+    if (!hasInternet) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Please turn on your internet connectivity to read this book online.')));
+      }
       return;
+    }
+
+    if (_progress == 0.0) {
+      await _fs.updateBookProgress(widget.bookId, 0.05);
+      if (mounted) setState(() => _progress = 0.05);
+    }
+
+    if (_hasStructuredContent) {
+      _startStructuredReading();
+      return;
+    }
+
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    final directDownloadUrl = 'https://drive.google.com/uc?export=download&id=${_book!.pdfDriveId!}';
+    final path = await DownloadService.instance.downloadPdfOnline(
+      widget.bookId,
+      directDownloadUrl,
+      (received, total) {
+        if (total != -1 && mounted) {
+          setState(() {
+            _downloadProgress = received / total;
+          });
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() => _isDownloading = false);
+      if (path != null) {
+        _startPdfReading(path);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open book online. Opening in browser...')));
+        launchUrl(Uri.parse('https://drive.google.com/file/d/${_book!.pdfDriveId!}/view'), mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
+  Future<void> _handleOfflineReading() async {
+    if (_hasStructuredContent) {
+      final offlineChapters = await DownloadService.instance.getOfflineChapters(widget.bookId);
+      if (offlineChapters != null) {
+        if (_progress == 0.0) {
+          await _fs.updateBookProgress(widget.bookId, 0.05);
+          if (mounted) setState(() => _progress = 0.05);
+        }
+        _startStructuredReading();
+        return;
+      }
+    } else {
+      final downloadedPath = await DownloadService.instance.getDownloadedPdfPath(widget.bookId);
+      if (downloadedPath != null) {
+        if (_progress == 0.0) {
+          await _fs.updateBookProgress(widget.bookId, 0.05);
+          if (mounted) setState(() => _progress = 0.05);
+        }
+        _startPdfReading(downloadedPath);
+        return;
+      }
     }
 
     final hasInternet = await NetworkService.instance.isConnected();
     if (!hasInternet) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('No internet connection. Please connect to download this book for offline reading.')));
+            content: Text('Internet connection is required to download this book for offline reading.')));
       }
       return;
     }
 
-    // Update progress to started (5%) if not started
     if (_progress == 0.0) {
       await _fs.updateBookProgress(widget.bookId, 0.05);
       if (mounted) setState(() => _progress = 0.05);
     }
 
-    // Trigger Rewarded Ad before downloading
     if (mounted) {
       showDialog(
         context: context,
@@ -164,6 +273,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Future<void> _startDownload() async {
+    if (_hasStructuredContent) {
+      setState(() {
+        _isDownloading = true;
+        _downloadProgress = null; // Indeterminate
+      });
+      await DownloadService.instance.saveOfflineChapters(widget.bookId, jsonEncode(_fetchedChapters));
+      
+      // We could also download images here, but caching via CachedNetworkImage might be enough if viewed while downloading
+      
+      if (mounted) {
+        setState(() => _isDownloading = false);
+        _startStructuredReading();
+      }
+      return;
+    }
+
     final directDownloadUrl = 'https://drive.google.com/uc?export=download&id=${_book!.pdfDriveId!}';
     final path = await DownloadService.instance.downloadPdf(
       widget.bookId,
@@ -180,19 +305,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (mounted) {
       setState(() => _isDownloading = false);
       if (path != null) {
-        _startReading(path);
+        _startPdfReading(path);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Could not download PDF directly. Opening in browser...')));
-        launchUrl(Uri.parse(directDownloadUrl), mode: LaunchMode.externalApplication);
+        launchUrl(Uri.parse('https://drive.google.com/file/d/${_book!.pdfDriveId!}/view'), mode: LaunchMode.externalApplication);
       }
     }
   }
 
-  void _startReading(String path) {
+  void _startPdfReading(String path) {
     context.push(Uri(
       path: '/pdf-reader',
       queryParameters: {'title': _book!.title, 'path': path},
+    ).toString());
+  }
+
+  void _startStructuredReading() {
+    context.push(Uri(
+      path: '/structured-reader',
+      queryParameters: {'bookId': widget.bookId, 'title': _book!.title},
     ).toString());
   }
 
@@ -273,8 +405,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 60),
-                      Text(book.emoji ?? book.title[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 80)),
+                      if (book.url != null && book.url!.isNotEmpty)
+                        Container(
+                          height: 160,
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5))
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                            child: Image.network(book.url!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Text(book.emoji ?? book.title[0].toUpperCase(), style: const TextStyle(fontSize: 80))),
+                          ),
+                        )
+                      else
+                        Text(book.emoji ?? book.title[0].toUpperCase(),
+                            style: const TextStyle(fontSize: 80)),
                       const SizedBox(height: 8),
                       if (book.pages > 0)
                         Container(

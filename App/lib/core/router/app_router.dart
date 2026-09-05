@@ -9,6 +9,7 @@ import '../../features/explore/view/explore_page.dart';
 import '../../features/book_detail/view/book_detail_page.dart';
 import '../../features/reader/view/reader_page.dart';
 import '../../features/reader/view/pdf_reader_page.dart';
+import '../../features/reader/view/structured_reader_page.dart';
 import '../../features/study/view/study_page.dart';
 import '../../features/shelf/view/shelf_page.dart';
 import '../../features/profile/view/profile_page.dart';
@@ -108,6 +109,13 @@ class AppRouter {
         builder: (context, state) => PdfReaderPage(
           title: state.uri.queryParameters['title'] ?? 'PDF Reader',
           path: state.uri.queryParameters['path'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/structured-reader',
+        builder: (context, state) => StructuredReaderPage(
+          bookId: state.uri.queryParameters['bookId'] ?? '',
+          title: state.uri.queryParameters['title'] ?? 'Book Reader',
         ),
       ),
     ],
