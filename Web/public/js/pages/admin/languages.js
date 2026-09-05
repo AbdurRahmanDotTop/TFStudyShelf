@@ -27,7 +27,7 @@ window.AdminLanguages = (() => {
 
   async function loadData() {
     try {
-      const res = await ApiClient.getLanguages();
+      const res = await ApiClient.admin.getLanguages();
       languages = res.data || [];
       renderList();
     } catch (err) {

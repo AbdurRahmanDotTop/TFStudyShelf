@@ -237,9 +237,9 @@ window.AdminBookEditor = (() => {
     // Load categories, subjects, and languages
     try {
       const [catResult, subResult, langResult] = await Promise.all([
-        ApiClient.getCategories(),
-        ApiClient.getSubjects(),
-        ApiClient.getLanguages()
+        ApiClient.admin.getCategories(),
+        ApiClient.admin.getSubjects(),
+        ApiClient.admin.getLanguages()
       ]);
       categories = catResult.data || [];
       subjects = subResult.data || [];

@@ -50,8 +50,8 @@ window.AdminCategories = (() => {
   async function loadData() {
     try {
       const [catResult, subResult] = await Promise.all([
-        ApiClient.getCategories(),
-        ApiClient.getSubjects()
+        ApiClient.admin.getCategories(),
+        ApiClient.admin.getSubjects()
       ]);
 
       categories = catResult.data || [];

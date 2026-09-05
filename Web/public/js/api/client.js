@@ -58,9 +58,10 @@ window.ApiClient = (() => {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const error = new Error(data.message || `API Error: ${response.status}`);
+      const errorMessage = (data.error && data.error.message) || data.message || `API Error: ${response.status}`;
+      const error = new Error(errorMessage);
       error.status = response.status;
-      error.code = data.code;
+      error.code = (data.error && data.error.code) || data.code;
       throw error;
     }
 
@@ -111,39 +112,42 @@ window.ApiClient = (() => {
       unpublishBook: (id) => request(`/api/v1/admin/books/${id}/unpublish`, { method: 'POST' }),
 
       // Chapters
-      getChapters: (bookId) => request(`/api/v1/books/${bookId}/chapters`), 
+      getChapters: (bookId) => request(`/api/v1/admin/books/${bookId}/chapters`), 
       createChapter: (bookId, body) => request('/api/v1/admin/chapters', { method: 'POST', body: { bookId, ...body } }),
       updateChapter: (bookId, chapterId, body) => request(`/api/v1/admin/chapters/${chapterId}`, { method: 'PUT', body: { bookId, ...body } }),
       deleteChapter: (bookId, chapterId) => request(`/api/v1/admin/chapters/${chapterId}`, { method: 'DELETE' }),
       
       // Q&A
-      getQuestions: (bookId) => request(`/api/v1/books/${bookId}/questions`),
+      getQuestions: (bookId) => request(`/api/v1/admin/books/${bookId}/questions`),
       createQuestion: (bookId, body) => request('/api/v1/admin/questions', { method: 'POST', body: { bookId, ...body } }),
       updateQuestion: (bookId, questionId, body) => request(`/api/v1/admin/questions/${questionId}`, { method: 'PUT', body: { bookId, ...body } }),
       deleteQuestion: (bookId, questionId) => request(`/api/v1/admin/questions/${questionId}`, { method: 'DELETE' }),
 
       // Quizzes
-      getQuizzes: (bookId) => request(`/api/v1/books/${bookId}/quizzes`),
+      getQuizzes: (bookId) => request(`/api/v1/admin/books/${bookId}/quizzes`),
       createQuiz: (bookId, body) => request('/api/v1/admin/quizzes', { method: 'POST', body: { bookId, ...body } }),
       updateQuiz: (bookId, quizId, body) => request(`/api/v1/admin/quizzes/${quizId}`, { method: 'PUT', body: { bookId, ...body } }),
       deleteQuiz: (bookId, quizId) => request(`/api/v1/admin/quizzes/${quizId}`, { method: 'DELETE' }),
 
       // Flashcards
-      getFlashcards: (bookId) => request(`/api/v1/books/${bookId}/flashcards`),
+      getFlashcards: (bookId) => request(`/api/v1/admin/books/${bookId}/flashcards`),
       createFlashcardSet: (bookId, body) => request('/api/v1/admin/flashcard-sets', { method: 'POST', body: { bookId, ...body } }),
       updateFlashcardSet: (bookId, setId, body) => request(`/api/v1/admin/flashcard-sets/${setId}`, { method: 'PUT', body: { bookId, ...body } }),
       deleteFlashcardSet: (bookId, setId) => request(`/api/v1/admin/flashcard-sets/${setId}`, { method: 'DELETE' }),
 
       // Categories & Subjects
+      getCategories: () => request('/api/v1/admin/categories'),
       createCategory: (body) => request('/api/v1/admin/categories', { method: 'POST', body }),
       updateCategory: (id, body) => request(`/api/v1/admin/categories/${id}`, { method: 'PUT', body }),
       deleteCategory: (id) => request(`/api/v1/admin/categories/${id}`, { method: 'DELETE' }),
       
+      getSubjects: () => request('/api/v1/admin/subjects'),
       createSubject: (body) => request('/api/v1/admin/subjects', { method: 'POST', body }),
       updateSubject: (id, body) => request(`/api/v1/admin/subjects/${id}`, { method: 'PUT', body }),
       deleteSubject: (id) => request(`/api/v1/admin/subjects/${id}`, { method: 'DELETE' }),
 
       // Languages
+      getLanguages: () => request('/api/v1/admin/languages'),
       createLanguage: (body) => request('/api/v1/admin/languages', { method: 'POST', body }),
       updateLanguage: (id, body) => request(`/api/v1/admin/languages/${id}`, { method: 'PUT', body }),
       deleteLanguage: (id) => request(`/api/v1/admin/languages/${id}`, { method: 'DELETE' }),

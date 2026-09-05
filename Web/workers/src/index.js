@@ -283,7 +283,7 @@ async function handleGetBook(bookId, env) {
 
 async function handleGetChapters(bookId, env) {
   const chapters = await env.DB.prepare(
-    "SELECT * FROM chapters WHERE book_id = ? ORDER BY chapter_number"
+    "SELECT * FROM chapters WHERE book_id = ? AND status = 'PUBLISHED' ORDER BY chapter_number"
   ).bind(bookId).all();
   
   // Get question/quiz/flashcard counts per chapter
@@ -625,6 +625,20 @@ async function handleAdminUnpublishBook(bookId, admin, env, emergency = false) {
 
 // ─── Admin Chapters ──────────────────────────────
 
+async function handleAdminGetChapters(bookId, admin, env) {
+  const chapters = await env.DB.prepare(
+    "SELECT * FROM chapters WHERE book_id = ? ORDER BY chapter_number"
+  ).bind(bookId).all();
+  
+  const results = chapters.results || [];
+  for (const ch of results) {
+    const qc = await env.DB.prepare("SELECT COUNT(*) as c FROM questions WHERE chapter_id = ?").bind(ch.id).first();
+    ch.questionsCount = qc.c;
+  }
+  
+  return successResponse(results);
+}
+
 async function handleAdminCreateChapter(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.bookId || !body.title || body.chapterNumber === undefined) {
@@ -672,6 +686,33 @@ async function handleAdminDeleteChapter(chapterId, admin, env) {
 }
 
 // ─── Admin Questions ─────────────────────────────
+
+async function handleAdminGetQuestions(bookId, params, admin, env) {
+  const page = parseInt(params.page) || 1;
+  const limit = Math.min(parseInt(params.limit) || 20, 50);
+  const offset = (page - 1) * limit;
+  
+  let where = "book_id = ?";
+  const binds = [bookId];
+  
+  if (params.chapterId) { where += ' AND chapter_id = ?'; binds.push(params.chapterId); }
+  if (params.type) { where += ' AND question_type = ?'; binds.push(params.type); }
+  if (params.difficulty) { where += ' AND difficulty = ?'; binds.push(params.difficulty); }
+  if (params.status) { where += ' AND status = ?'; binds.push(params.status); }
+  
+  const total = (await env.DB.prepare(`SELECT COUNT(*) as c FROM questions WHERE ${where}`).bind(...binds).first()).c;
+  const questions = await env.DB.prepare(`SELECT * FROM questions WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
+  
+  // Fetch options for MCQ questions
+  for (const q of (questions.results || [])) {
+    if (q.question_type === 'MCQ') {
+      const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
+      q.options = opts.results || [];
+    }
+  }
+  
+  return successResponse(questions.results || [], { page, limit, total, hasMore: offset + limit < total });
+}
 
 async function handleAdminCreateQuestion(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
@@ -741,6 +782,17 @@ async function handleAdminDeleteQuestion(questionId, admin, env) {
 
 // ─── Admin Quizzes ───────────────────────────────
 
+async function handleAdminGetQuizzes(bookId, admin, env) {
+  const quizzes = await env.DB.prepare("SELECT * FROM quizzes WHERE book_id = ?").bind(bookId).all();
+  
+  for (const quiz of (quizzes.results || [])) {
+    const qc = await env.DB.prepare('SELECT COUNT(*) as c FROM quiz_questions WHERE quiz_id = ?').bind(quiz.id).first();
+    quiz.questionCount = qc.c;
+  }
+  
+  return successResponse(quizzes.results || []);
+}
+
 async function handleAdminCreateQuiz(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.title || !body.questionIds?.length) {
@@ -800,6 +852,11 @@ async function handleAdminDeleteQuiz(quizId, admin, env) {
 }
 
 // ─── Admin Flashcards ────────────────────────────
+
+async function handleAdminGetFlashcards(bookId, admin, env) {
+  const sets = await env.DB.prepare("SELECT * FROM flashcard_sets WHERE book_id = ?").bind(bookId).all();
+  return successResponse(sets.results || []);
+}
 
 async function handleAdminCreateFlashcardSet(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
@@ -862,6 +919,10 @@ async function handleAdminDeleteFlashcardSet(setId, admin, env) {
 async function handleAdminCreateCategory(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.name) throw { status: 400, code: 'VALIDATION_ERROR', message: 'name required' };
+  
+  const existing = await env.DB.prepare('SELECT id FROM categories WHERE name = ?').bind(body.name).first();
+  if (existing) throw { status: 400, code: 'ALREADY_EXISTS', message: 'Category with this name already exists' };
+
   const id = generateId();
   await env.DB.prepare('INSERT INTO categories (id, name, description, icon_url, display_order, parent_id) VALUES (?, ?, ?, ?, ?, ?)').bind(id, body.name, body.description || null, body.iconUrl || null, body.displayOrder || 0, body.parentId || null).run();
   await auditLog(env, admin.adminId, 'CREATE', 'category', id);
@@ -871,6 +932,10 @@ async function handleAdminCreateCategory(body, admin, env) {
 async function handleAdminCreateSubject(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.name) throw { status: 400, code: 'VALIDATION_ERROR', message: 'name required' };
+  
+  const existing = await env.DB.prepare('SELECT id FROM subjects WHERE name = ?').bind(body.name).first();
+  if (existing) throw { status: 400, code: 'ALREADY_EXISTS', message: 'Subject with this name already exists' };
+
   const id = generateId();
   await env.DB.prepare('INSERT INTO subjects (id, name, description, icon_url, display_order, category_id) VALUES (?, ?, ?, ?, ?, ?)').bind(id, body.name, body.description || null, body.iconUrl || null, body.displayOrder || 0, body.categoryId || null).run();
   await auditLog(env, admin.adminId, 'CREATE', 'subject', id);
@@ -937,6 +1002,10 @@ async function handleAdminDeleteSubject(id, admin, env) {
 async function handleAdminCreateLanguage(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.code || !body.name) throw { status: 400, code: 'VALIDATION_ERROR', message: 'code and name required' };
+  
+  const existing = await env.DB.prepare('SELECT id FROM languages WHERE code = ? OR name = ?').bind(body.code, body.name).first();
+  if (existing) throw { status: 400, code: 'ALREADY_EXISTS', message: 'Language with this code or name already exists' };
+
   const id = generateId();
   await env.DB.prepare('INSERT INTO languages (id, code, name, native_name, is_active) VALUES (?, ?, ?, ?, ?)').bind(id, body.code, body.name, body.nativeName || null, body.isActive !== false ? 1 : 0).run();
   await auditLog(env, admin.adminId, 'CREATE', 'language', id);
@@ -966,6 +1035,23 @@ async function handleAdminDeleteLanguage(id, admin, env) {
   await env.DB.prepare('DELETE FROM languages WHERE id = ?').bind(id).run();
   await auditLog(env, admin.adminId, 'DELETE', 'language', id);
   return successResponse({ deleted: true });
+}
+
+// ─── Admin Categories/Subjects/Languages GET ────────
+
+async function handleAdminGetCategories(env) {
+  const cats = await env.DB.prepare('SELECT * FROM categories ORDER BY display_order, name').all();
+  return successResponse(cats.results || []);
+}
+
+async function handleAdminGetSubjects(env) {
+  const subs = await env.DB.prepare('SELECT * FROM subjects ORDER BY display_order, name').all();
+  return successResponse(subs.results || []);
+}
+
+async function handleAdminGetLanguages(env) {
+  const langs = await env.DB.prepare('SELECT * FROM languages ORDER BY name').all();
+  return successResponse(langs.results || []);
 }
 
 // ─── Admin Users ─────────────────────────────────
@@ -1243,6 +1329,9 @@ export default {
           response = await handleAdminUnpublishBook(routeParams.id, admin, env, true);
         }
         // Admin Chapters
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/chapters'))) {
+          response = await handleAdminGetChapters(routeParams.id, admin, env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/chapters') {
           response = await handleAdminCreateChapter(body, admin, env);
         }
@@ -1253,6 +1342,9 @@ export default {
           response = await handleAdminDeleteChapter(routeParams.id, admin, env);
         }
         // Admin Questions
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/questions'))) {
+          response = await handleAdminGetQuestions(routeParams.id, params, admin, env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/questions') {
           response = await handleAdminCreateQuestion(body, admin, env);
         }
@@ -1263,6 +1355,9 @@ export default {
           response = await handleAdminDeleteQuestion(routeParams.id, admin, env);
         }
         // Admin Quizzes
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/quizzes'))) {
+          response = await handleAdminGetQuizzes(routeParams.id, admin, env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/quizzes') {
           response = await handleAdminCreateQuiz(body, admin, env);
         }
@@ -1273,6 +1368,9 @@ export default {
           response = await handleAdminDeleteQuiz(routeParams.id, admin, env);
         }
         // Admin Flashcards
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/flashcards'))) {
+          response = await handleAdminGetFlashcards(routeParams.id, admin, env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/flashcard-sets') {
           response = await handleAdminCreateFlashcardSet(body, admin, env);
         }
@@ -1283,6 +1381,9 @@ export default {
           response = await handleAdminDeleteFlashcardSet(routeParams.id, admin, env);
         }
         // Admin Categories & Subjects
+        else if (method === 'GET' && path === '/api/v1/admin/categories') {
+          response = await handleAdminGetCategories(env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/categories') {
           response = await handleAdminCreateCategory(body, admin, env);
         }
@@ -1291,6 +1392,9 @@ export default {
         }
         else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/categories/:id'))) {
           response = await handleAdminDeleteCategory(routeParams.id, admin, env);
+        }
+        else if (method === 'GET' && path === '/api/v1/admin/subjects') {
+          response = await handleAdminGetSubjects(env);
         }
         else if (method === 'POST' && path === '/api/v1/admin/subjects') {
           response = await handleAdminCreateSubject(body, admin, env);
@@ -1302,6 +1406,9 @@ export default {
           response = await handleAdminDeleteSubject(routeParams.id, admin, env);
         }
         // Admin Languages
+        else if (method === 'GET' && path === '/api/v1/admin/languages') {
+          response = await handleAdminGetLanguages(env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/languages') {
           response = await handleAdminCreateLanguage(body, admin, env);
         }
