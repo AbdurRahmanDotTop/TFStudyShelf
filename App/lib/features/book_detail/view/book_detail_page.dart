@@ -564,7 +564,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       child: const Icon(Icons.help_outline_rounded, color: AppColors.primaryDark, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    Text('Questions & Answers', style: AppTypography.headlineSmall.copyWith(fontSize: 20)),
+                    Text('Questions & Answers', style: AppTypography.titleLarge),
                   ],
                 ),
                 const SizedBox(height: AppTheme.spaceLg),

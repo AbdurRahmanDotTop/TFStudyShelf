@@ -188,21 +188,22 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
           child: SafeArea(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: _currentChapterIndex > 0 ? _prevChapter : null,
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Previous'),
-              ),
-              Text(
-                '${_currentChapterIndex + 1} / ${_chapters.length}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextButton.icon(
-                onPressed: _currentChapterIndex < _chapters.length - 1 ? _nextChapter : null,
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Next'),
-              ),
+              children: [
+                TextButton.icon(
+                  onPressed: _currentChapterIndex > 0 ? _prevChapter : null,
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Previous'),
+                ),
+                Text(
+                  '${_currentChapterIndex + 1} / ${_chapters.length}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                TextButton.icon(
+                  onPressed: _currentChapterIndex < _chapters.length - 1 ? _nextChapter : null,
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('Next'),
+                ),
+              ],
             ),
           ),
         ),
