@@ -350,6 +350,11 @@ async function handleGetSubjects(env) {
   return successResponse(subs.results || []);
 }
 
+async function handleGetLanguages(env) {
+  const langs = await env.DB.prepare('SELECT * FROM languages WHERE is_active = 1 ORDER BY name').all();
+  return successResponse(langs.results || []);
+}
+
 async function handleGetStudyPacks(env) {
   const packs = await env.DB.prepare("SELECT * FROM study_packs WHERE status = 'PUBLISHED' ORDER BY display_order").all();
   return successResponse(packs.results || []);
@@ -659,6 +664,13 @@ async function handleAdminUpdateChapter(chapterId, body, admin, env) {
   return successResponse(chapter);
 }
 
+async function handleAdminDeleteChapter(chapterId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'chapter', chapterId);
+  return successResponse({ deleted: true });
+}
+
 // ─── Admin Questions ─────────────────────────────
 
 async function handleAdminCreateQuestion(body, admin, env) {
@@ -683,6 +695,38 @@ async function handleAdminCreateQuestion(body, admin, env) {
   
   await auditLog(env, admin.adminId, 'CREATE', 'question', id);
   return successResponse({ id });
+}
+
+async function handleAdminUpdateQuestion(questionId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.questionText !== undefined) { fields.push('question_text = ?'); values.push(body.questionText); }
+  if (body.questionType !== undefined) { fields.push('question_type = ?'); values.push(body.questionType); }
+  if (body.difficulty !== undefined) { fields.push('difficulty = ?'); values.push(body.difficulty); }
+  if (body.answer !== undefined) { fields.push('answer = ?'); values.push(body.answer); }
+  if (body.explanation !== undefined) { fields.push('explanation = ?'); values.push(body.explanation); }
+  if (body.marks !== undefined) { fields.push('marks = ?'); values.push(body.marks); }
+  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
+  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
+  
+  if (fields.length > 0) {
+    values.push(questionId);
+    await env.DB.prepare(`UPDATE questions SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  // Update options for MCQ
+  if (body.questionType === 'MCQ' && body.options !== undefined) {
+    await env.DB.prepare('DELETE FROM question_options WHERE question_id = ?').bind(questionId).run();
+    for (let i = 0; i < body.options.length; i++) {
+      const optId = generateId();
+      await env.DB.prepare('INSERT INTO question_options (id, question_id, option_text, option_order, is_correct) VALUES (?, ?, ?, ?, ?)').bind(optId, questionId, body.options[i].text, i, body.options[i].isCorrect ? 1 : 0).run();
+    }
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE', 'question', questionId);
+  return successResponse({ updated: true });
 }
 
 async function handleAdminDeleteQuestion(questionId, admin, env) {
@@ -717,6 +761,44 @@ async function handleAdminCreateQuiz(body, admin, env) {
   return successResponse({ id });
 }
 
+async function handleAdminUpdateQuiz(quizId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
+  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
+  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
+  if (body.timeLimitSeconds !== undefined) { fields.push('time_limit_seconds = ?'); values.push(body.timeLimitSeconds); }
+  if (body.randomize !== undefined) { fields.push('randomize = ?'); values.push(body.randomize ? 1 : 0); }
+  if (body.showExplanation !== undefined) { fields.push('show_explanation = ?'); values.push(body.showExplanation ? 1 : 0); }
+  if (body.passingScorePercent !== undefined) { fields.push('passing_score_percent = ?'); values.push(body.passingScorePercent); }
+  if (body.difficulty !== undefined) { fields.push('difficulty = ?'); values.push(body.difficulty); }
+  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
+  
+  if (fields.length > 0) {
+    values.push(quizId);
+    await env.DB.prepare(`UPDATE quizzes SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  if (body.questionIds !== undefined) {
+    await env.DB.prepare('DELETE FROM quiz_questions WHERE quiz_id = ?').bind(quizId).run();
+    for (let i = 0; i < body.questionIds.length; i++) {
+      await env.DB.prepare('INSERT INTO quiz_questions (quiz_id, question_id, question_order) VALUES (?, ?, ?)').bind(quizId, body.questionIds[i], i).run();
+    }
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE', 'quiz', quizId);
+  return successResponse({ updated: true });
+}
+
+async function handleAdminDeleteQuiz(quizId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(quizId).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'quiz', quizId);
+  return successResponse({ deleted: true });
+}
+
 // ─── Admin Flashcards ────────────────────────────
 
 async function handleAdminCreateFlashcardSet(body, admin, env) {
@@ -740,6 +822,41 @@ async function handleAdminCreateFlashcardSet(body, admin, env) {
   return successResponse({ id });
 }
 
+async function handleAdminUpdateFlashcardSet(setId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
+  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
+  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
+  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
+  if (body.cards !== undefined) { fields.push('card_count = ?'); values.push(body.cards.length); }
+  
+  if (fields.length > 0) {
+    values.push(setId);
+    await env.DB.prepare(`UPDATE flashcard_sets SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  if (body.cards !== undefined) {
+    await env.DB.prepare('DELETE FROM flashcards WHERE set_id = ?').bind(setId).run();
+    for (let i = 0; i < body.cards.length; i++) {
+      const cardId = generateId();
+      await env.DB.prepare('INSERT INTO flashcards (id, set_id, front_text, back_text, display_order) VALUES (?, ?, ?, ?, ?)').bind(cardId, setId, body.cards[i].front, body.cards[i].back, i).run();
+    }
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE', 'flashcard_set', setId);
+  return successResponse({ updated: true });
+}
+
+async function handleAdminDeleteFlashcardSet(setId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM flashcard_sets WHERE id = ?').bind(setId).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'flashcard_set', setId);
+  return successResponse({ deleted: true });
+}
+
 // ─── Admin Categories/Subjects ───────────────────
 
 async function handleAdminCreateCategory(body, admin, env) {
@@ -758,6 +875,97 @@ async function handleAdminCreateSubject(body, admin, env) {
   await env.DB.prepare('INSERT INTO subjects (id, name, description, icon_url, display_order, category_id) VALUES (?, ?, ?, ?, ?, ?)').bind(id, body.name, body.description || null, body.iconUrl || null, body.displayOrder || 0, body.categoryId || null).run();
   await auditLog(env, admin.adminId, 'CREATE', 'subject', id);
   return successResponse({ id, name: body.name });
+}
+
+async function handleAdminUpdateCategory(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.name !== undefined) { fields.push('name = ?'); values.push(body.name); }
+  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
+  if (body.iconUrl !== undefined) { fields.push('icon_url = ?'); values.push(body.iconUrl); }
+  if (body.displayOrder !== undefined) { fields.push('display_order = ?'); values.push(body.displayOrder); }
+  if (body.parentId !== undefined) { fields.push('parent_id = ?'); values.push(body.parentId); }
+  if (body.isActive !== undefined) { fields.push('is_active = ?'); values.push(body.isActive ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE categories SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  await auditLog(env, admin.adminId, 'UPDATE', 'category', id);
+  return successResponse({ updated: true });
+}
+
+async function handleAdminDeleteCategory(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN');
+  // Optional: Check if there are subjects or books linked to this category before deleting
+  await env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'category', id);
+  return successResponse({ deleted: true });
+}
+
+async function handleAdminUpdateSubject(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.name !== undefined) { fields.push('name = ?'); values.push(body.name); }
+  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
+  if (body.iconUrl !== undefined) { fields.push('icon_url = ?'); values.push(body.iconUrl); }
+  if (body.displayOrder !== undefined) { fields.push('display_order = ?'); values.push(body.displayOrder); }
+  if (body.categoryId !== undefined) { fields.push('category_id = ?'); values.push(body.categoryId); }
+  if (body.isActive !== undefined) { fields.push('is_active = ?'); values.push(body.isActive ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE subjects SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  await auditLog(env, admin.adminId, 'UPDATE', 'subject', id);
+  return successResponse({ updated: true });
+}
+
+async function handleAdminDeleteSubject(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN');
+  await env.DB.prepare('DELETE FROM subjects WHERE id = ?').bind(id).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'subject', id);
+  return successResponse({ deleted: true });
+}
+
+// ─── Admin Languages ─────────────────────────────
+
+async function handleAdminCreateLanguage(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.code || !body.name) throw { status: 400, code: 'VALIDATION_ERROR', message: 'code and name required' };
+  const id = generateId();
+  await env.DB.prepare('INSERT INTO languages (id, code, name, native_name, is_active) VALUES (?, ?, ?, ?, ?)').bind(id, body.code, body.name, body.nativeName || null, body.isActive !== false ? 1 : 0).run();
+  await auditLog(env, admin.adminId, 'CREATE', 'language', id);
+  return successResponse({ id, name: body.name });
+}
+
+async function handleAdminUpdateLanguage(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = [];
+  const values = [];
+  
+  if (body.code !== undefined) { fields.push('code = ?'); values.push(body.code); }
+  if (body.name !== undefined) { fields.push('name = ?'); values.push(body.name); }
+  if (body.nativeName !== undefined) { fields.push('native_name = ?'); values.push(body.nativeName); }
+  if (body.isActive !== undefined) { fields.push('is_active = ?'); values.push(body.isActive ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE languages SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  await auditLog(env, admin.adminId, 'UPDATE', 'language', id);
+  return successResponse({ updated: true });
+}
+
+async function handleAdminDeleteLanguage(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN');
+  await env.DB.prepare('DELETE FROM languages WHERE id = ?').bind(id).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'language', id);
+  return successResponse({ deleted: true });
 }
 
 // ─── Admin Users ─────────────────────────────────
@@ -983,6 +1191,9 @@ export default {
       else if (method === 'GET' && path === '/api/v1/subjects') {
         response = await handleGetSubjects(env);
       }
+      else if (method === 'GET' && path === '/api/v1/languages') {
+        response = await handleGetLanguages(env);
+      }
       else if (method === 'GET' && path === '/api/v1/study-packs') {
         response = await handleGetStudyPacks(env);
       }
@@ -1038,9 +1249,15 @@ export default {
         else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/chapters/:id'))) {
           response = await handleAdminUpdateChapter(routeParams.id, body, admin, env);
         }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/chapters/:id'))) {
+          response = await handleAdminDeleteChapter(routeParams.id, admin, env);
+        }
         // Admin Questions
         else if (method === 'POST' && path === '/api/v1/admin/questions') {
           response = await handleAdminCreateQuestion(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/questions/:id'))) {
+          response = await handleAdminUpdateQuestion(routeParams.id, body, admin, env);
         }
         else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/questions/:id'))) {
           response = await handleAdminDeleteQuestion(routeParams.id, admin, env);
@@ -1049,16 +1266,50 @@ export default {
         else if (method === 'POST' && path === '/api/v1/admin/quizzes') {
           response = await handleAdminCreateQuiz(body, admin, env);
         }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/quizzes/:id'))) {
+          response = await handleAdminUpdateQuiz(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/quizzes/:id'))) {
+          response = await handleAdminDeleteQuiz(routeParams.id, admin, env);
+        }
         // Admin Flashcards
         else if (method === 'POST' && path === '/api/v1/admin/flashcard-sets') {
           response = await handleAdminCreateFlashcardSet(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/flashcard-sets/:id'))) {
+          response = await handleAdminUpdateFlashcardSet(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/flashcard-sets/:id'))) {
+          response = await handleAdminDeleteFlashcardSet(routeParams.id, admin, env);
         }
         // Admin Categories & Subjects
         else if (method === 'POST' && path === '/api/v1/admin/categories') {
           response = await handleAdminCreateCategory(body, admin, env);
         }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/categories/:id'))) {
+          response = await handleAdminUpdateCategory(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/categories/:id'))) {
+          response = await handleAdminDeleteCategory(routeParams.id, admin, env);
+        }
         else if (method === 'POST' && path === '/api/v1/admin/subjects') {
           response = await handleAdminCreateSubject(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/subjects/:id'))) {
+          response = await handleAdminUpdateSubject(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/subjects/:id'))) {
+          response = await handleAdminDeleteSubject(routeParams.id, admin, env);
+        }
+        // Admin Languages
+        else if (method === 'POST' && path === '/api/v1/admin/languages') {
+          response = await handleAdminCreateLanguage(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/languages/:id'))) {
+          response = await handleAdminUpdateLanguage(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/languages/:id'))) {
+          response = await handleAdminDeleteLanguage(routeParams.id, admin, env);
         }
         // Admin Users
         else if (method === 'GET' && path === '/api/v1/admin/users') {

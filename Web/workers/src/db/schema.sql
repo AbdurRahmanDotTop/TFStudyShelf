@@ -75,6 +75,16 @@ CREATE TABLE IF NOT EXISTS subjects (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ─── Languages ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS languages (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL UNIQUE,
+  native_name TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ─── Book Junction Tables ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS book_categories (
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,

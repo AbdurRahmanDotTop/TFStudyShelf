@@ -29,7 +29,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _loading = true;
   bool _savingShelf = false;
   bool _isDownloading = false;
-  double _downloadProgress = 0.0;
+  double? _downloadProgress;
   List<BookQnA> _qnaList = [];
 
   @override
@@ -79,6 +79,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
         duration: const Duration(seconds: 2),
       ));
     }
+  }
+
   bool _hasStructuredContent = false;
   List<dynamic> _fetchedChapters = [];
 
@@ -529,7 +531,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onPrimary))
                         : const Icon(Icons.menu_book_rounded),
                       label: Text(
-                          _isDownloading ? 'Downloading ${(_downloadProgress * 100).toInt()}%' 
+                          _isDownloading ? 'Downloading ${((_downloadProgress ?? 0) * 100).toInt()}%' 
                           : _progress > 0 ? 'Continue Reading' : 'Start Reading'),
                       style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14)),
@@ -601,7 +603,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 class _Chip extends StatelessWidget {
   final String label;
   final Color color;
-  const _Chip({required this.label, required this.color});
+  const _Chip({super.key, required this.label, required this.color});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -621,7 +623,7 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   const _DetailRow(
-      {required this.icon, required this.label, required this.value});
+      {super.key, required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {

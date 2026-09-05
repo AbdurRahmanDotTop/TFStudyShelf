@@ -2,19 +2,20 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 <AdminLayout title="Flashcards — Admin Panel">
-  <div id="admin-page-content-inner">
-    <div class="admin-page-header">
-      <div>
-        <h1 class="admin-page-header__title">Flashcards</h1>
-        <p class="admin-page-header__subtitle">Create flashcard sets for study</p>
-      </div>
-    </div>
-    <div class="card" style="text-align:center;padding:var(--space-3xl)">
-      <div class="empty-state__icon" style="margin:0 auto var(--space-md)">
-        <span class="material-symbols-outlined" style="font-size:28px">style</span>
-      </div>
-      <h3 class="text-title-large mb-sm">Coming Next</h3>
-      <p class="text-body-medium text-secondary">Create flashcard sets for study. This page will be implemented in the next phase.</p>
-    </div>
-  </div>
+  <div id="admin-page-content-inner"></div>
+  
+  <script is:inline src="/js/pages/admin/flashcards.js"></script>
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', () => {
+      const checkAuth = setInterval(() => {
+        if (typeof ApiClient !== 'undefined' && ApiClient.getAuthToken()) {
+          clearInterval(checkAuth);
+          if (window.AdminFlashcards) {
+            AdminFlashcards.render(document.getElementById('admin-page-content-inner'));
+          }
+        }
+      }, 100);
+      setTimeout(() => clearInterval(checkAuth), 5000);
+    });
+  </script>
 </AdminLayout>

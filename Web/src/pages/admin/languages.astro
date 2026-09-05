@@ -1,17 +1,17 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
-<AdminLayout title="Quizzes — Admin Panel">
+<AdminLayout title="Languages — Admin Panel">
   <div id="admin-page-content-inner"></div>
   
-  <script is:inline src="/js/pages/admin/quizzes.js"></script>
+  <script is:inline src="/js/pages/admin/languages.js"></script>
   <script is:inline>
     document.addEventListener('DOMContentLoaded', () => {
       const checkAuth = setInterval(() => {
         if (typeof ApiClient !== 'undefined' && ApiClient.getAuthToken()) {
           clearInterval(checkAuth);
-          if (window.AdminQuizzes) {
-            AdminQuizzes.render(document.getElementById('admin-page-content-inner'));
+          if (window.AdminLanguages) {
+            AdminLanguages.render(document.getElementById('admin-page-content-inner'));
           }
         }
       }, 100);

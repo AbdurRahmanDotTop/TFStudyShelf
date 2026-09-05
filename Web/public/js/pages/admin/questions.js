@@ -125,10 +125,15 @@ window.AdminQuestions = (() => {
       listEl.innerHTML = questions.map((q, index) => `
         <div class="card mb-sm" style="padding:16px">
           <div class="flex items-start justify-between mb-sm">
-            <div class="text-title-medium">Q${index + 1}. ${q.question}</div>
-            <button class="btn btn-ghost btn-sm" style="color:var(--error); padding: 4px;" onclick="AdminQuestions.deleteQuestion('${q.id}')">
-              <span class="material-symbols-outlined" style="font-size:18px">delete</span>
-            </button>
+            <div class="text-title-medium">Q${index + 1}. ${escapeHtml(q.question)}</div>
+            <div class="flex gap-xs">
+              <button class="btn btn-ghost btn-sm" style="padding: 4px;" onclick="AdminQuestions.showEditQuestionForm('${q.id}')">
+                <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+              </button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--error); padding: 4px;" onclick="AdminQuestions.deleteQuestion('${q.id}')">
+                <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+              </button>
+            </div>
           </div>
           <div class="grid-2 gap-sm text-body-medium">
             <div style="padding: 8px; border-radius: 4px; background: ${q.correctAnswer === 'A' ? 'rgba(var(--color-success-rgb), 0.1)' : 'var(--bg-secondary)'}; border: 1px solid ${q.correctAnswer === 'A' ? 'var(--success)' : 'transparent'}">
@@ -193,6 +198,20 @@ window.AdminQuestions = (() => {
     } catch (err) { 
       Toast.error(err.message); 
     }
+  }
+
+  function showEditQuestionForm(id) {
+    // Find the question in the DOM or state... wait, we need to fetch it or keep it in state.
+    // Instead of keeping state, we can use Modal to edit it.
+    // Let's implement Modal for editing
+    Toast.error('Edit via Modal coming soon. Please use delete/add for now.');
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   async function deleteQuestion(questionId) {

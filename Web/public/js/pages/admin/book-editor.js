@@ -52,16 +52,15 @@ window.AdminBookEditor = (() => {
             <label class="form-label" for="book-description">Description *</label>
             <textarea id="book-description" class="form-input" placeholder="Write a compelling description…" rows="4"></textarea>
           </div>
+          <div class="form-group mt-md">
+            <label class="form-label" for="book-cover-url">Cover Image URL *</label>
+            <input type="url" id="book-cover-url" class="form-input" placeholder="https://..." required>
+          </div>
           <div class="editor-form__row mt-md">
             <div class="form-group">
-              <label class="form-label" for="book-language">Language</label>
+              <label class="form-label" for="book-language">Language *</label>
               <select id="book-language" class="form-input">
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="bn">Bengali</option>
-                <option value="te">Telugu</option>
-                <option value="ta">Tamil</option>
-                <option value="mr">Marathi</option>
+                <option value="">Loading languages...</option>
               </select>
             </div>
             <div class="form-group">
@@ -122,20 +121,6 @@ window.AdminBookEditor = (() => {
           </div>
         </div>
 
-        <!-- Google Drive / Cover -->
-        <div class="editor-form__section">
-          <h3 class="editor-form__section-title">📁 Content Files</h3>
-          <div class="editor-form__row">
-            <div class="form-group">
-              <label class="form-label" for="book-pdf-drive-id">PDF Google Drive File ID</label>
-              <input type="text" id="book-pdf-drive-id" class="form-input" placeholder="Google Drive file ID">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-cover-url">Cover Image URL</label>
-              <input type="url" id="book-cover-url" class="form-input" placeholder="https://...">
-            </div>
-          </div>
-        </div>
 
         <!-- Categories & Tags -->
         <div class="editor-form__section">
@@ -249,14 +234,16 @@ window.AdminBookEditor = (() => {
   }
 
   async function loadFormData(isEdit) {
-    // Load categories and subjects
+    // Load categories, subjects, and languages
     try {
-      const [catResult, subResult] = await Promise.all([
+      const [catResult, subResult, langResult] = await Promise.all([
         ApiClient.getCategories(),
-        ApiClient.getSubjects()
+        ApiClient.getSubjects(),
+        ApiClient.getLanguages()
       ]);
       categories = catResult.data || [];
       subjects = subResult.data || [];
+      const languages = langResult.data || [];
 
       document.getElementById('category-checkboxes').innerHTML = categories.length
         ? categories.map(c => `<label class="checkbox-label"><input type="checkbox" value="${c.id}" class="cat-checkbox"> ${c.name}</label>`).join('')
@@ -265,8 +252,15 @@ window.AdminBookEditor = (() => {
       document.getElementById('subject-checkboxes').innerHTML = subjects.length
         ? subjects.map(s => `<label class="checkbox-label"><input type="checkbox" value="${s.id}" class="sub-checkbox"> ${s.name}</label>`).join('')
         : '<span class="text-body-small text-tertiary">No subjects yet. Add from Categories page.</span>';
+        
+      const langSelect = document.getElementById('book-language');
+      if (languages.length) {
+        langSelect.innerHTML = languages.map(l => `<option value="${l.code}">${l.name}</option>`).join('');
+      } else {
+        langSelect.innerHTML = '<option value="en">English (Default)</option>';
+      }
     } catch (err) {
-      console.error('Failed to load categories/subjects:', err);
+      console.error('Failed to load categories/subjects/languages:', err);
     }
 
     // If editing, populate form
@@ -291,7 +285,6 @@ window.AdminBookEditor = (() => {
         document.getElementById('book-allow-download').checked = !!(book.allowed_download || book.allowedDownload);
         document.getElementById('book-allow-offline').checked = !!(book.allowed_offline || book.allowedOffline);
         document.getElementById('book-allow-share').checked = !!(book.allowed_share || book.allowedShare);
-        document.getElementById('book-pdf-drive-id').value = book.pdf_google_drive_id || book.pdfGoogleDriveId || '';
         document.getElementById('book-cover-url').value = book.cover_image_url || book.coverImageUrl || '';
         document.getElementById('book-tags').value = (book.tags || []).join(', ');
         document.getElementById('book-exam-tags').value = (book.examTags || []).join(', ');
@@ -351,7 +344,6 @@ window.AdminBookEditor = (() => {
       allowedDownload: document.getElementById('book-allow-download').checked,
       allowedOffline: document.getElementById('book-allow-offline').checked,
       allowedShare: document.getElementById('book-allow-share').checked,
-      pdfGoogleDriveId: document.getElementById('book-pdf-drive-id').value || null,
       coverImageUrl: document.getElementById('book-cover-url').value || '',
       tags: document.getElementById('book-tags').value.split(',').map(s => s.trim()).filter(Boolean),
       examTags: document.getElementById('book-exam-tags').value.split(',').map(s => s.trim()).filter(Boolean),
