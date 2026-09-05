@@ -2,54 +2,210 @@
 import UserLayout from '../layouts/UserLayout.astro';
 ---
 <UserLayout title="TF Study Shelf — Explore">
-  <div class="user-content fade-in">
-    <div class="admin-page-header">
-      <div>
-        <h1 class="admin-page-header__title">Explore</h1>
-        <p class="admin-page-header__subtitle">Discover books, PDFs, and study materials</p>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="content-toolbar">
-      <div class="content-toolbar__search" style="max-width:480px">
-        <div class="search-bar">
+  <div class="explore-page fade-in">
+    <!-- Hero Section -->
+    <div class="explore-hero">
+      <h1 class="explore-hero__title">Explore Library</h1>
+      <p class="explore-hero__subtitle">Discover textbooks, PDFs, and interactive study materials to boost your learning.</p>
+      
+      <div class="explore-hero__search">
+        <div class="search-bar search-bar--large">
           <span class="material-symbols-outlined icon">search</span>
-          <input type="text" id="explore-search" placeholder="Search books, topics, questions…">
+          <input type="text" id="explore-search" placeholder="Search books, topics, authors…">
         </div>
       </div>
-      <div class="content-toolbar__filters">
-        <select class="form-input" id="explore-sort" style="width:auto;padding:8px 32px 8px 12px;font-size:13px">
-          <option value="recent">Recently Added</option>
-          <option value="popular">Most Popular</option>
-          <option value="title">Title A-Z</option>
-          <option value="rating">Top Rated</option>
-        </select>
-        <select class="form-input" id="explore-difficulty" style="width:auto;padding:8px 32px 8px 12px;font-size:13px">
-          <option value="">All Difficulty</option>
-          <option value="EASY">Easy</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="HARD">Hard</option>
-        </select>
+    </div>
+
+    <!-- Filters & Categories -->
+    <div class="explore-controls">
+      <div id="explore-category-chips" class="explore-categories hide-scrollbar">
+        <!-- Categories loaded dynamically -->
+        <span class="chip active" data-cat="" style="cursor:pointer">All</span>
+      </div>
+      
+      <div class="explore-filters">
+        <div class="form-input-icon">
+          <span class="material-symbols-outlined icon">sort</span>
+          <select class="form-input" id="explore-sort">
+            <option value="recent">Recently Added</option>
+            <option value="popular">Most Popular</option>
+            <option value="title">Title A-Z</option>
+            <option value="rating">Top Rated</option>
+          </select>
+        </div>
+        <div class="form-input-icon">
+          <span class="material-symbols-outlined icon">school</span>
+          <select class="form-input" id="explore-difficulty">
+            <option value="">All Levels</option>
+            <option value="EASY">Beginner</option>
+            <option value="MEDIUM">Intermediate</option>
+            <option value="HARD">Advanced</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <!-- Category Chips -->
-    <div id="explore-category-chips" class="flex gap-sm mb-lg" style="flex-wrap:wrap;overflow-x:auto">
-      <span class="chip active" data-cat="" style="cursor:pointer">All</span>
+    <!-- Results Section -->
+    <div class="explore-content">
+      <div class="books-grid" id="explore-results">
+        <!-- Initial Skeletons -->
+        <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+        <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+        <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+        <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
+      </div>
+      <div id="explore-pagination" class="pagination mt-xl"></div>
     </div>
-
-    <!-- Results Grid -->
-    <div class="books-grid" id="explore-results">
-      <!-- Skeletons -->
-      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
-      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
-      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
-      <div class="book-card"><div class="book-card__cover skeleton" style="aspect-ratio:3/4"></div><div class="skeleton mt-sm" style="height:16px;width:80%"></div><div class="skeleton mt-xs" style="height:12px;width:60%"></div></div>
-    </div>
-
-    <div id="explore-pagination" class="pagination"></div>
   </div>
+
+  <style>
+    .explore-page {
+      padding: var(--space-xl) var(--space-md);
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .explore-hero {
+      text-align: center;
+      margin-bottom: var(--space-xl);
+    }
+    .explore-hero__title {
+      font: 700 36px/1.2 var(--font-primary);
+      color: var(--text-primary);
+      margin-bottom: var(--space-sm);
+    }
+    .explore-hero__subtitle {
+      font: 400 16px/1.5 var(--font-primary);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-lg);
+    }
+    .explore-hero__search {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .search-bar--large {
+      padding: 8px 24px;
+      font-size: 16px;
+      border-radius: 40px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: box-shadow var(--transition-normal);
+    }
+    .search-bar--large:focus-within {
+      box-shadow: 0 0 0 3px var(--color-accent-subtle);
+      border-color: var(--accent);
+    }
+    .search-bar--large .icon {
+      font-size: 24px;
+      color: var(--text-tertiary);
+    }
+    .search-bar--large input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 16px;
+      color: var(--text-primary);
+      outline: none;
+      padding: 8px 0;
+    }
+    
+    .explore-controls {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+    @media (min-width: 768px) {
+      .explore-controls {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+    .explore-categories {
+      display: flex;
+      gap: var(--space-sm);
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .explore-categories::-webkit-scrollbar {
+      display: none;
+    }
+    .explore-filters {
+      display: flex;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+    .explore-filters .form-input-icon .form-input {
+      padding-left: 40px;
+      width: 170px;
+      border-radius: 20px;
+      cursor: pointer;
+    }
+    
+    .books-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: var(--space-xl) var(--space-lg);
+    }
+    .book-card {
+      transition: transform var(--transition-normal);
+      border-radius: var(--radius-md);
+      position: relative;
+    }
+    .book-card:hover {
+      transform: translateY(-4px);
+    }
+    .book-card__cover {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      aspect-ratio: 3/4;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: var(--space-sm);
+      background: var(--bg-elevated);
+      position: relative;
+    }
+    .book-card__cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0,0,0,0.05);
+      pointer-events: none;
+    }
+    .book-card__title {
+      font-size: 15px;
+      line-height: 1.4;
+      font-weight: 600;
+    }
+    .book-card__author {
+      font-size: 13px;
+    }
+    .book-card__meta {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 64px 0;
+      color: var(--text-secondary);
+      grid-column: 1 / -1;
+    }
+    .empty-state .icon {
+      font-size: 64px;
+      color: var(--text-tertiary);
+      margin-bottom: var(--space-md);
+      opacity: 0.5;
+    }
+    .empty-state p {
+      font-size: 16px;
+      font-weight: 500;
+    }
+  </style>
 
   <script is:inline>
     document.addEventListener('DOMContentLoaded', async () => {
@@ -79,40 +235,65 @@ import UserLayout from '../layouts/UserLayout.astro';
         const el = document.getElementById(containerId);
         if (!el) return;
         if (books.length === 0) {
-          el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p class="empty-state__title">No books found</p></div>';
+          el.innerHTML = `
+            <div class="empty-state">
+              <span class="material-symbols-outlined icon">search_off</span>
+              <p>No books found matching your criteria.</p>
+              <button class="btn btn-primary mt-md" onclick="window.location.href='/explore'">Clear Filters</button>
+            </div>
+          `;
           return;
         }
-        el.innerHTML = books.map(book => `
-          <a class="book-card" href="/book?id=${book.id}" style="text-decoration:none;color:inherit;display:block">
+        
+        // Add a slight animation delay for each card
+        el.innerHTML = books.map((book, i) => `
+          <a class="book-card fade-in" href="/book?id=${book.id}" style="text-decoration:none;color:inherit;display:block;animation-delay:${i * 50}ms">
             <div class="book-card__cover">
               ${book.cover_image_url
-                ? '<img src="' + book.cover_image_url + '" alt="' + escapeHtml(book.title) + '" loading="lazy">'
-                : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700">' + book.title[0] + '</div>'
+                ? '<img src="' + escapeHtml(book.cover_image_url) + '" alt="' + escapeHtml(book.title) + '" loading="lazy">'
+                : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:700">' + escapeHtml(book.title[0]) + '</div>'
               }
             </div>
             <div class="book-card__title">${escapeHtml(book.title)}</div>
-            <div class="book-card__author">${escapeHtml(book.author)}</div>
-            <div class="book-card__meta">
-              <span>⭐ ${book.rating?.toFixed(1) || '—'}</span>
-              <span>📄 ${book.page_count}</span>
+            <div class="book-card__author">${escapeHtml(book.author || 'Unknown Author')}</div>
+            <div class="book-card__meta mt-xs">
+              <span>⭐ ${book.rating ? book.rating.toFixed(1) : 'New'}</span>
+              <span>•</span>
+              <span>📄 ${book.page_count || 0} pages</span>
             </div>
           </a>
         `).join('');
       }
 
       async function loadData() {
+        // Show loading state
+        const grid = document.getElementById('explore-results');
+        if (grid && !grid.innerHTML.includes('skeleton')) {
+          grid.style.opacity = '0.5';
+        }
+
         try {
-          const result = await ApiClient.getBooks({
+          // Construct params carefully to omit undefined/empty strings
+          // URLSearchParams converts `{ key: undefined }` to `"key=undefined"` which breaks the backend filter.
+          const params = {
             page: exploreState.page,
             limit: 20,
-            sort: exploreState.sort,
-            difficulty: exploreState.difficulty || undefined,
-            category: exploreState.category || undefined,
-            search: exploreState.search || undefined
-          });
+            sort: exploreState.sort
+          };
+          
+          if (exploreState.difficulty) params.difficulty = exploreState.difficulty;
+          if (exploreState.category) params.category = exploreState.category;
+          if (exploreState.search) params.search = exploreState.search;
+
+          const result = await ApiClient.getBooks(params);
+          
+          if (grid) grid.style.opacity = '1';
           renderGrid('explore-results', result.data || []);
         } catch(err) {
-          document.getElementById('explore-results').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Error connecting to API server</p></div>';
+          if (grid) {
+            grid.style.opacity = '1';
+            grid.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined icon">error</span><p>Error connecting to server.</p></div>';
+          }
         }
       }
 
@@ -120,30 +301,63 @@ import UserLayout from '../layouts/UserLayout.astro';
       loadData();
       
       // Load Categories
-      ApiClient.getCategories().then(res => {
+      try {
+        const res = await ApiClient.getCategories();
         const cats = res.data || [];
         const container = document.getElementById('explore-category-chips');
-        container.innerHTML = `<span class="chip ${!exploreState.category ? 'active' : ''}" data-cat="" style="cursor:pointer">All</span>` +
-          cats.map(c => `<span class="chip ${exploreState.category === c.id ? 'active' : ''}" data-cat="${c.id}" style="cursor:pointer">${escapeHtml(c.name)}</span>`).join('');
-        
-        container.querySelectorAll('.chip').forEach(chip => {
-          chip.addEventListener('click', (e) => {
-            container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            e.target.classList.add('active');
-            exploreState.category = e.target.getAttribute('data-cat');
-            loadData();
+        if (container) {
+          container.innerHTML = `<span class="chip ${!exploreState.category ? 'active' : ''}" data-cat="" style="cursor:pointer;border-radius:20px;padding:6px 16px;">All</span>` +
+            cats.map(c => `<span class="chip ${exploreState.category === c.id ? 'active' : ''}" data-cat="${c.id}" style="cursor:pointer;border-radius:20px;padding:6px 16px;">${escapeHtml(c.name)}</span>`).join('');
+          
+          container.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', (e) => {
+              container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+              e.target.classList.add('active');
+              exploreState.category = e.target.getAttribute('data-cat');
+              exploreState.page = 1; // Reset to page 1 on filter
+              loadData();
+            });
           });
-        });
-      });
+        }
+      } catch (err) {
+        console.warn("Could not load categories", err);
+      }
 
       // Events
       let searchTimeout;
-      document.getElementById('explore-search')?.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => { exploreState.search = e.target.value; loadData(); }, 400);
+      const searchInput = document.getElementById('explore-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => { 
+            exploreState.search = e.target.value.trim(); 
+            exploreState.page = 1;
+            loadData(); 
+          }, 400);
+        });
+        
+        // Allow enter key to trigger search immediately
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            clearTimeout(searchTimeout);
+            exploreState.search = e.target.value.trim();
+            exploreState.page = 1;
+            loadData();
+          }
+        });
+      }
+      
+      document.getElementById('explore-sort')?.addEventListener('change', (e) => { 
+        exploreState.sort = e.target.value; 
+        exploreState.page = 1;
+        loadData(); 
       });
-      document.getElementById('explore-sort')?.addEventListener('change', (e) => { exploreState.sort = e.target.value; loadData(); });
-      document.getElementById('explore-difficulty')?.addEventListener('change', (e) => { exploreState.difficulty = e.target.value; loadData(); });
+      
+      document.getElementById('explore-difficulty')?.addEventListener('change', (e) => { 
+        exploreState.difficulty = e.target.value; 
+        exploreState.page = 1;
+        loadData(); 
+      });
 
     });
   </script>
