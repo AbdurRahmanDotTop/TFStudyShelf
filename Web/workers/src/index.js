@@ -319,7 +319,7 @@ async function handleGetQuestions(bookId, params, env) {
       q.metadata = {};
     }
     
-    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT') {
+    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT' || q.question_type === 'IMAGE_BASED') {
       const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
       q.options = opts.results || [];
     }
@@ -717,7 +717,7 @@ async function handleAdminGetQuestions(bookId, params, admin, env) {
       q.metadata = {};
     }
     
-    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT') {
+    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT' || q.question_type === 'IMAGE_BASED') {
       const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
       q.options = opts.results || [];
     }
@@ -741,7 +741,7 @@ async function handleAdminCreateQuestion(body, admin, env) {
   `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, metadataString, body.marks || 1, body.status || 'DRAFT', admin.adminId).run();
   
   // Add options for types that support options
-  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT') && body.options?.length) {
+  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT' || body.questionType === 'IMAGE_BASED') && body.options?.length) {
     for (let i = 0; i < body.options.length; i++) {
       const optId = generateId();
       await env.DB.prepare('INSERT INTO question_options (id, question_id, option_text, option_order, is_correct) VALUES (?, ?, ?, ?, ?)').bind(optId, id, body.options[i].text, i, body.options[i].isCorrect ? 1 : 0).run();
@@ -773,7 +773,7 @@ async function handleAdminUpdateQuestion(questionId, body, admin, env) {
   }
   
   // Update options if present and applicable
-  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT') && body.options !== undefined) {
+  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT' || body.questionType === 'IMAGE_BASED') && body.options !== undefined) {
     await env.DB.prepare('DELETE FROM question_options WHERE question_id = ?').bind(questionId).run();
     for (let i = 0; i < body.options.length; i++) {
       const optId = generateId();
