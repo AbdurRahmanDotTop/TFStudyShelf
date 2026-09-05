@@ -148,10 +148,12 @@ window.AdminQuizzes = (() => {
           <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px;">
             ${currentBookQuestions.map(q => {
               const checked = selectedQuestionIds.includes(q.id) ? 'checked' : '';
+              const qText = q.question_text || '';
+              const qType = q.question_type || 'Unknown';
               return `
                 <label class="flex items-center gap-sm mb-xs" style="cursor: pointer;">
                   <input type="checkbox" class="quiz-question-cb" value="${q.id}" ${checked}>
-                  <span class="text-body-small">${escapeHtml(q.text.substring(0, 80))}${q.text.length > 80 ? '...' : ''} <span class="text-secondary" style="font-size: 10px;">(${q.type})</span></span>
+                  <span class="text-body-small">${escapeHtml(qText.substring(0, 80))}${qText.length > 80 ? '...' : ''} <span class="text-secondary" style="font-size: 10px;">(${qType})</span></span>
                 </label>
               `;
             }).join('')}
