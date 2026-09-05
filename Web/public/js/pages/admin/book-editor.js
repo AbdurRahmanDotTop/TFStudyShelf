@@ -182,7 +182,7 @@ window.AdminBookEditor = (() => {
       list.innerHTML = qnas.map(q => `
         <div class="card mb-sm p-sm flex items-start justify-between" style="border:1px solid var(--border)">
           <div>
-            <div class="text-body-medium" style="font-weight:600">Q: ${escapeHtml(q.question)}</div>
+            <div class="text-body-medium" style="font-weight:600">Q: ${escapeHtml(q.question_text)}</div>
             <div class="text-body-small text-secondary mt-xs">A: ${escapeHtml(q.answer)}</div>
           </div>
           <button class="btn-icon" onclick="AdminBookEditor.deleteQnA('${q.id}'); return false;">

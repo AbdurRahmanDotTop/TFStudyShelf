@@ -311,9 +311,15 @@ async function handleGetQuestions(bookId, params, env) {
   const total = (await env.DB.prepare(`SELECT COUNT(*) as c FROM questions WHERE ${where}`).bind(...binds).first()).c;
   const questions = await env.DB.prepare(`SELECT * FROM questions WHERE ${where} ORDER BY display_order, created_at LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
   
-  // Fetch options for MCQ questions
+  // Fetch options for MCQ questions and parse metadata
   for (const q of (questions.results || [])) {
-    if (q.question_type === 'MCQ') {
+    if (q.metadata) {
+      try { q.metadata = JSON.parse(q.metadata); } catch(e) {}
+    } else {
+      q.metadata = {};
+    }
+    
+    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT') {
       const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
       q.options = opts.results || [];
     }
@@ -703,9 +709,15 @@ async function handleAdminGetQuestions(bookId, params, admin, env) {
   const total = (await env.DB.prepare(`SELECT COUNT(*) as c FROM questions WHERE ${where}`).bind(...binds).first()).c;
   const questions = await env.DB.prepare(`SELECT * FROM questions WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
   
-  // Fetch options for MCQ questions
+  // Fetch options for MCQ questions and parse metadata
   for (const q of (questions.results || [])) {
-    if (q.question_type === 'MCQ') {
+    if (q.metadata) {
+      try { q.metadata = JSON.parse(q.metadata); } catch(e) {}
+    } else {
+      q.metadata = {};
+    }
+    
+    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT') {
       const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
       q.options = opts.results || [];
     }
@@ -721,13 +733,15 @@ async function handleAdminCreateQuestion(body, admin, env) {
   }
   
   const id = generateId();
-  await env.DB.prepare(`
-    INSERT INTO questions (id, book_id, chapter_id, question_text, question_type, difficulty, answer, explanation, marks, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, body.marks || 1, body.status || 'DRAFT', admin.adminId).run();
+  const metadataString = body.metadata ? JSON.stringify(body.metadata) : null;
   
-  // Add options for MCQ
-  if (body.questionType === 'MCQ' && body.options?.length) {
+  await env.DB.prepare(`
+    INSERT INTO questions (id, book_id, chapter_id, question_text, question_type, difficulty, answer, explanation, metadata, marks, status, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, metadataString, body.marks || 1, body.status || 'DRAFT', admin.adminId).run();
+  
+  // Add options for types that support options
+  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT') && body.options?.length) {
     for (let i = 0; i < body.options.length; i++) {
       const optId = generateId();
       await env.DB.prepare('INSERT INTO question_options (id, question_id, option_text, option_order, is_correct) VALUES (?, ?, ?, ?, ?)').bind(optId, id, body.options[i].text, i, body.options[i].isCorrect ? 1 : 0).run();
@@ -751,14 +765,15 @@ async function handleAdminUpdateQuestion(questionId, body, admin, env) {
   if (body.marks !== undefined) { fields.push('marks = ?'); values.push(body.marks); }
   if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
   if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
+  if (body.metadata !== undefined) { fields.push('metadata = ?'); values.push(body.metadata ? JSON.stringify(body.metadata) : null); }
   
   if (fields.length > 0) {
     values.push(questionId);
     await env.DB.prepare(`UPDATE questions SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
   }
   
-  // Update options for MCQ
-  if (body.questionType === 'MCQ' && body.options !== undefined) {
+  // Update options if present and applicable
+  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT') && body.options !== undefined) {
     await env.DB.prepare('DELETE FROM question_options WHERE question_id = ?').bind(questionId).run();
     for (let i = 0; i < body.options.length; i++) {
       const optId = generateId();

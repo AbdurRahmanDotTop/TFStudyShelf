@@ -134,12 +134,11 @@ CREATE TABLE IF NOT EXISTS questions (
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   chapter_id TEXT REFERENCES chapters(id) ON DELETE SET NULL,
   question_text TEXT NOT NULL,
-  question_type TEXT NOT NULL CHECK (question_type IN (
-    'MCQ', 'SHORT', 'LONG', 'TRUE_FALSE', 'FILL_BLANK', 'EXAM', 'CONCEPTUAL'
-  )),
+  question_type TEXT NOT NULL,
   difficulty TEXT NOT NULL DEFAULT 'MEDIUM' CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
   answer TEXT NOT NULL,
   explanation TEXT,
+  metadata TEXT,
   marks INTEGER DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'REVIEW', 'PUBLISHED', 'UNPUBLISHED')),
   display_order INTEGER DEFAULT 0,
