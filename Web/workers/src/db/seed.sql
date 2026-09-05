@@ -30,6 +30,14 @@ INSERT OR IGNORE INTO subjects (id, name, description, category_id, display_orde
   ('sub-python', 'Python', 'Python programming language', 'cat-cs', 1),
   ('sub-habits', 'Habit Building', 'Building better habits', 'cat-selfdev', 1);
 
+-- ─── Languages ───────────────────────────────────────────────
+INSERT OR IGNORE INTO languages (id, code, name, native_name, is_active) VALUES
+  ('lang-en', 'en', 'English', 'English', 1),
+  ('lang-hi', 'hi', 'Hindi', 'हिन्दी', 1),
+  ('lang-bn', 'bn', 'Bengali', 'বাংলা', 1),
+  ('lang-es', 'es', 'Spanish', 'Español', 1),
+  ('lang-fr', 'fr', 'French', 'Français', 1);
+
 -- ─── Sample Books ────────────────────────────────────────────
 INSERT OR IGNORE INTO books (id, title, author, description, language, page_count, difficulty, estimated_read_time_minutes, rights_status, license_name, allowed_download, allowed_offline, allowed_share, status, published_at, created_by, rating, rating_count, featured_order) VALUES
   ('book-001', 'Fundamentals of Physics', 'David Halliday', 'A comprehensive introduction to physics covering mechanics, thermodynamics, electromagnetism, optics, and modern physics. This textbook has been the gold standard for introductory physics courses for decades.', 'en', 1232, 'MEDIUM', 3600, 'OPEN_LICENSE', 'CC BY 4.0', 1, 1, 1, 'PUBLISHED', datetime('now'), 'admin-001', 4.7, 245, 1),

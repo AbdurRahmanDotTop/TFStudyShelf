@@ -236,14 +236,19 @@ window.AdminBookEditor = (() => {
   async function loadFormData(isEdit) {
     // Load categories, subjects, and languages
     try {
-      const [catResult, subResult, langResult] = await Promise.all([
+      const [catSettled, subSettled, langSettled] = await Promise.allSettled([
         ApiClient.admin.getCategories(),
         ApiClient.admin.getSubjects(),
         ApiClient.admin.getLanguages()
       ]);
-      categories = catResult.data || [];
-      subjects = subResult.data || [];
-      const languages = langResult.data || [];
+      
+      categories = catSettled.status === 'fulfilled' ? (catSettled.value.data || []) : [];
+      subjects = subSettled.status === 'fulfilled' ? (subSettled.value.data || []) : [];
+      const languages = langSettled.status === 'fulfilled' ? (langSettled.value.data || []) : [];
+
+      if (catSettled.status === 'rejected') console.error('Failed to load categories:', catSettled.reason);
+      if (subSettled.status === 'rejected') console.error('Failed to load subjects:', subSettled.reason);
+      if (langSettled.status === 'rejected') console.error('Failed to load languages:', langSettled.reason);
 
       document.getElementById('category-checkboxes').innerHTML = categories.length
         ? categories.map(c => `<label class="checkbox-label"><input type="checkbox" value="${c.id}" class="cat-checkbox"> ${c.name}</label>`).join('')

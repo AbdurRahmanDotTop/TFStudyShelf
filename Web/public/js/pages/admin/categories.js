@@ -49,18 +49,21 @@ window.AdminCategories = (() => {
 
   async function loadData() {
     try {
-      const [catResult, subResult] = await Promise.all([
+      const [catSettled, subSettled] = await Promise.allSettled([
         ApiClient.admin.getCategories(),
         ApiClient.admin.getSubjects()
       ]);
 
-      categories = catResult.data || [];
-      subjects = subResult.data || [];
+      categories = catSettled.status === 'fulfilled' ? (catSettled.value.data || []) : [];
+      subjects = subSettled.status === 'fulfilled' ? (subSettled.value.data || []) : [];
+      
+      if (catSettled.status === 'rejected') Toast.error('Failed to load categories: ' + (catSettled.reason.message || 'Error'));
+      if (subSettled.status === 'rejected') Toast.error('Failed to load subjects: ' + (subSettled.reason.message || 'Error'));
       
       renderCategories();
       renderSubjects();
     } catch (err) {
-      Toast.error('Failed to load data: ' + err.message);
+      Toast.error('An unexpected error occurred: ' + err.message);
     }
   }
 
