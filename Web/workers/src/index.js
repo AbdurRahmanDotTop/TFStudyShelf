@@ -618,6 +618,13 @@ async function handleAdminPublishBook(bookId, admin, env) {
   if (book.rights_status === 'RESTRICTED') throw { status: 400, code: 'VALIDATION_ERROR', message: 'Cannot publish RESTRICTED content' };
   
   await env.DB.prepare("UPDATE books SET status = 'PUBLISHED', published_at = datetime('now') WHERE id = ?").bind(bookId).run();
+  
+  // Cascade publish to child content
+  await env.DB.prepare("UPDATE chapters SET status = 'PUBLISHED' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE questions SET status = 'PUBLISHED' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE quizzes SET status = 'PUBLISHED' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE flashcard_sets SET status = 'PUBLISHED' WHERE book_id = ?").bind(bookId).run();
+
   await auditLog(env, admin.adminId, 'PUBLISH', 'book', bookId, { title: book.title });
   return successResponse({ published: true });
 }
@@ -625,6 +632,13 @@ async function handleAdminPublishBook(bookId, admin, env) {
 async function handleAdminUnpublishBook(bookId, admin, env, emergency = false) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   await env.DB.prepare("UPDATE books SET status = 'UNPUBLISHED' WHERE id = ?").bind(bookId).run();
+  
+  // Cascade unpublish to child content
+  await env.DB.prepare("UPDATE chapters SET status = 'DRAFT' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE questions SET status = 'DRAFT' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE quizzes SET status = 'DRAFT' WHERE book_id = ?").bind(bookId).run();
+  await env.DB.prepare("UPDATE flashcard_sets SET status = 'DRAFT' WHERE book_id = ?").bind(bookId).run();
+
   await auditLog(env, admin.adminId, emergency ? 'EMERGENCY_UNPUBLISH' : 'UNPUBLISH', 'book', bookId);
   return successResponse({ unpublished: true, emergency });
 }
@@ -655,7 +669,7 @@ async function handleAdminCreateChapter(body, admin, env) {
   await env.DB.prepare(`
     INSERT INTO chapters (id, book_id, title, chapter_number, summary, content, word_count, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.bookId, body.title, body.chapterNumber, body.summary || null, body.content || null, body.wordCount || 0, body.status || 'DRAFT').run();
+  `).bind(id, body.bookId, body.title, body.chapterNumber, body.summary || null, body.content || null, body.wordCount || 0, body.status || 'PUBLISHED').run();
   
   await auditLog(env, admin.adminId, 'CREATE', 'chapter', id);
   const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(id).first();
@@ -738,7 +752,7 @@ async function handleAdminCreateQuestion(body, admin, env) {
   await env.DB.prepare(`
     INSERT INTO questions (id, book_id, chapter_id, question_text, question_type, difficulty, answer, explanation, metadata, marks, status, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, metadataString, body.marks || 1, body.status || 'DRAFT', admin.adminId).run();
+  `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, metadataString, body.marks || 1, body.status || 'PUBLISHED', admin.adminId).run();
   
   // Add options for types that support options
   if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT' || body.questionType === 'IMAGE_BASED') && body.options?.length) {
@@ -819,7 +833,7 @@ async function handleAdminCreateQuiz(body, admin, env) {
   await env.DB.prepare(`
     INSERT INTO quizzes (id, title, description, book_id, chapter_id, subject_id, time_limit_seconds, randomize, show_explanation, passing_score_percent, difficulty, status, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.subjectId || null, body.timeLimitSeconds || null, body.randomize !== false ? 1 : 0, body.showExplanation !== false ? 1 : 0, body.passingScorePercent || 60, body.difficulty || 'MIXED', body.status || 'DRAFT', admin.adminId).run();
+  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.subjectId || null, body.timeLimitSeconds || null, body.randomize !== false ? 1 : 0, body.showExplanation !== false ? 1 : 0, body.passingScorePercent || 60, body.difficulty || 'MIXED', body.status || 'PUBLISHED', admin.adminId).run();
   
   if (Array.isArray(body.questionIds) && body.questionIds.length > 0) {
     for (let i = 0; i < body.questionIds.length; i++) {
@@ -884,7 +898,7 @@ async function handleAdminCreateFlashcardSet(body, admin, env) {
   await env.DB.prepare(`
     INSERT INTO flashcard_sets (id, title, description, book_id, chapter_id, card_count, status, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.cards?.length || 0, body.status || 'DRAFT', admin.adminId).run();
+  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.cards?.length || 0, body.status || 'PUBLISHED', admin.adminId).run();
   
   if (body.cards?.length) {
     for (let i = 0; i < body.cards.length; i++) {

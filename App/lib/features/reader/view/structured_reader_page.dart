@@ -142,14 +142,17 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
       children: [
         // Chapter Header
         Container(
-          padding: const EdgeInsets.all(16),
-          color: Theme.of(context).colorScheme.primaryContainer,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4),
           width: double.infinity,
           child: Text(
-            'Chapter ${chapter.chapterNumber}: ${chapter.title}',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            'Chapter ${chapter.chapterNumber}\n${chapter.title}',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
             ),
+            textAlign: TextAlign.center,
           ),
         ),
         
@@ -158,11 +161,11 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
           child: blocks.isEmpty
               ? const Center(child: Text('This chapter is empty.'))
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   itemCount: blocks.length,
                   itemBuilder: (context, index) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
+                      padding: const EdgeInsets.only(bottom: 20.0),
                       child: _buildBlock(blocks[index]),
                     );
                   },
@@ -171,19 +174,20 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
 
         // Navigation Footer
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 5,
-                offset: const Offset(0, -2),
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, -4),
               ),
             ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton.icon(
                 onPressed: _currentChapterIndex > 0 ? _prevChapter : null,
@@ -199,7 +203,7 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
                 icon: const Icon(Icons.arrow_forward),
                 label: const Text('Next'),
               ),
-            ],
+            ),
           ),
         ),
       ],
@@ -210,49 +214,96 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
     if (block is ParagraphBlock) {
       return Text(
         block.content,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          height: 1.8,
+          fontSize: 17,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+          letterSpacing: 0.2,
+        ),
       );
     } else if (block is HeadingBlock) {
       TextStyle? style;
       if (block.level == 1) style = Theme.of(context).textTheme.headlineMedium;
-      else if (block.level == 2) style = Theme.of(context).textTheme.titleLarge;
-      else style = Theme.of(context).textTheme.titleMedium;
+      else if (block.level == 2) style = Theme.of(context).textTheme.headlineSmall;
+      else style = Theme.of(context).textTheme.titleLarge;
       
       return Padding(
-        padding: const EdgeInsets.only(top: 8.0),
+        padding: const EdgeInsets.only(top: 24.0, bottom: 4.0),
         child: Text(
           block.content,
-          style: style?.copyWith(fontWeight: FontWeight.bold),
+          style: style?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
       );
     } else if (block is ImageBlock) {
-      return CachedNetworkImage(
-        imageUrl: block.url,
-        placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-        errorWidget: (context, url, error) => Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey[200],
-          child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CachedNetworkImage(
+            imageUrl: block.url,
+            placeholder: (context, url) => Container(
+              height: 200,
+              color: Colors.grey[100],
+              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            errorWidget: (context, url, error) => Container(
+              padding: const EdgeInsets.all(32),
+              color: Colors.grey[100],
+              child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 48)),
+            ),
+            fit: BoxFit.cover,
+            width: double.infinity,
+          ),
         ),
       );
     } else if (block is VideoBlock) {
       return _VideoPlayerWidget(url: block.url);
     } else if (block is PdfBlock) {
       return Container(
-        height: 400,
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
         ),
-        // Just show a button to open PDF in a full reader to avoid nested scroll issues
-        child: Center(
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.picture_as_pdf),
-            label: const Text('Open PDF Reference'),
-            onPressed: () {
-              // TODO: Navigate to PDF view
-            },
-          ),
+        child: Column(
+          children: [
+            Icon(Icons.picture_as_pdf_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 16),
+            Text(
+              'PDF Reference Document',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This section contains a PDF document. Open the viewer to read it.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open PDF Viewer'),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                // TODO: Navigate to PDF view
+              },
+            ),
+          ],
         ),
       );
     }

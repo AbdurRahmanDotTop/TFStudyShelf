@@ -22,4 +22,13 @@ class BookQnA {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }
+
+  factory BookQnA.fromApiJson(Map<String, dynamic> json) {
+    return BookQnA(
+      id: json['id'],
+      question: json['question_text'] ?? json['question'] ?? '',
+      answer: json['answer'] ?? '',
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+    );
+  }
 }

@@ -44,6 +44,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _fs.getBook(widget.bookId),
       _fs.getBookProgress(widget.bookId),
       _fs.shelfBookIdsStream().first.catchError((_) => <String>[]),
+      _fs.getBookQnAs(widget.bookId),
     ]);
 
     if (mounted) {
@@ -52,11 +53,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _progress = results[1] as double;
         final shelfIds = results[2] as List<String>;
         _isSaved = shelfIds.contains(widget.bookId);
+        _qnaList = results[3] as List<BookQnA>;
         _loading = false;
-      });
-      
-      _fs.getBookQnAs(widget.bookId).listen((qna) {
-        if (mounted) setState(() => _qnaList = qna);
       });
     }
   }
@@ -554,33 +552,65 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
               // Q&A Section
               if (_qnaList.isNotEmpty) ...[
-                Text('Questions & Answers', style: AppTypography.labelLarge),
-                const SizedBox(height: AppTheme.spaceSm),
+                const Divider(height: 48, thickness: 1),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.help_outline_rounded, color: AppColors.primaryDark, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Questions & Answers', style: AppTypography.headlineSmall.copyWith(fontSize: 20)),
+                  ],
+                ),
+                const SizedBox(height: AppTheme.spaceLg),
                 ..._qnaList.map((q) => Container(
                       margin: const EdgeInsets.only(bottom: AppTheme.spaceMd),
-                      padding: const EdgeInsets.all(AppTheme.spaceMd),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                        color: theme.colorScheme.surface,
+                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.15)),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Q: ', style: AppTypography.labelMedium.copyWith(color: AppColors.primaryDark)),
-                              Expanded(child: Text(q.question, style: AppTypography.labelMedium)),
-                            ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Q: ', style: AppTypography.labelMedium.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.w900)),
+                                Expanded(child: Text(q.question, style: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w600))),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('A: ', style: AppTypography.bodyMedium.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold)),
-                              Expanded(child: Text(q.answer, style: AppTypography.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.8)))),
-                            ],
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('A: ', style: AppTypography.bodyMedium.copyWith(color: AppColors.accent, fontWeight: FontWeight.w900)),
+                                Expanded(child: Text(q.answer, style: AppTypography.bodyMedium.copyWith(
+                                  color: theme.colorScheme.onSurface.withOpacity(0.85),
+                                  height: 1.5,
+                                ))),
+                              ],
+                            ),
                           ),
                         ],
                       ),

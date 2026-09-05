@@ -3,6 +3,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/content_models.dart';
+import '../../../core/models/book_qna.dart';
+import '../../../core/models/firestore_service.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/di/injection.dart';
+import 'package:go_router/go_router.dart';
 
 /// Study Page — Quizzes, Flashcards, Q&A tabs
 class StudyPage extends StatefulWidget {
@@ -15,11 +20,83 @@ class StudyPage extends StatefulWidget {
 class _StudyPageState extends State<StudyPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  bool _loading = true;
+  FirestoreBook? _activeBook;
+  List<Map<String, dynamic>> _quizQuestions = [];
+  List<Flashcard> _flashcards = [];
+  List<BookQnA> _qnaList = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final fs = FirestoreService.instance;
+    final api = getIt<ApiService>();
+    
+    try {
+      final recent = await fs.getContinueReading();
+      final bookId = recent.book?.id;
+      
+      if (bookId == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      
+      _activeBook = recent.book;
+      
+      // Fetch data concurrently
+      final Future<void> loadQuiz = () async {
+        final quizzesResp = await api.getQuizzes(bookId);
+        if (quizzesResp.statusCode == 200 && quizzesResp.data['success'] == true) {
+          final List qList = quizzesResp.data['data'];
+          if (qList.isNotEmpty) {
+            final quizId = qList.first['id'];
+            final quizResp = await api.getQuiz(quizId);
+            if (quizResp.statusCode == 200 && quizResp.data['success'] == true) {
+               final quizData = quizResp.data['data'];
+               final qqs = quizData['questions'] as List;
+               _quizQuestions = qqs.map((q) => {
+                 'q': q['question'],
+                 'options': (q['options'] as List).map((o) => o.toString()).toList(),
+                 'answer': q['correct_option_index'],
+               }).toList();
+            }
+          }
+        }
+      }();
+
+      final Future<void> loadCards = () async {
+        final setsResp = await api.getFlashcards(bookId);
+        if (setsResp.statusCode == 200 && setsResp.data['success'] == true) {
+           final List sList = setsResp.data['data'];
+           if (sList.isNotEmpty) {
+              final setId = sList.first['id'];
+              final setResp = await api.getFlashcardSet(setId);
+              if (setResp.statusCode == 200 && setResp.data['success'] == true) {
+                 final setData = setResp.data['data'];
+                 final fcs = setData['flashcards'] as List;
+                 _flashcards = fcs.map((f) => Flashcard.fromJson(f)).toList();
+              }
+           }
+        }
+      }();
+
+      final Future<void> loadQnA = () async {
+        _qnaList = await fs.getBookQnAs(bookId);
+      }();
+
+      await Future.wait([loadQuiz, loadCards, loadQnA]);
+      
+    } catch (_) {}
+    
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -45,13 +122,44 @@ class _StudyPageState extends State<StudyPage>
           indicatorColor: AppColors.accent,
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _QuizTab(),
-          _FlashcardsTab(),
-          _QATab(),
-        ],
+      body: _loading 
+          ? const Center(child: CircularProgressIndicator())
+          : _activeBook == null
+              ? _buildEmptyState()
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _QuizTab(questions: _quizQuestions, bookTitle: _activeBook!.title),
+                    _FlashcardsTab(cards: _flashcards),
+                    _QATab(questions: _qnaList),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spaceXl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🎯', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: AppTheme.spaceMd),
+            Text('Start studying to see your progress', style: AppTypography.titleLarge, textAlign: TextAlign.center),
+            const SizedBox(height: AppTheme.spaceSm),
+            Text(
+              'Take quizzes, review flashcards, and answer questions to build your study statistics.',
+              style: AppTypography.bodyMedium.copyWith(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppTheme.spaceXl),
+            ElevatedButton(
+              onPressed: () => context.go('/explore'),
+              child: const Text('Find Study Material'),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -60,7 +168,9 @@ class _StudyPageState extends State<StudyPage>
 // ── Quiz Tab ─────────────────────────────────────────
 
 class _QuizTab extends StatefulWidget {
-  const _QuizTab();
+  final List<Map<String, dynamic>> questions;
+  final String bookTitle;
+  const _QuizTab({required this.questions, required this.bookTitle});
 
   @override
   State<_QuizTab> createState() => _QuizTabState();
@@ -73,48 +183,15 @@ class _QuizTabState extends State<_QuizTab> {
   int _score = 0;
   bool _showResult = false;
 
-  final _questions = [
-    {
-      'q': "Newton's First Law is also known as the law of:",
-      'options': ['Acceleration', 'Inertia', 'Gravity', 'Momentum'],
-      'answer': 1,
-    },
-    {
-      'q': 'What is the SI unit of force?',
-      'options': ['Pascal', 'Joule', 'Newton', 'Watt'],
-      'answer': 2,
-    },
-    {
-      'q': 'Which of these is a scalar quantity?',
-      'options': ['Force', 'Velocity', 'Speed', 'Acceleration'],
-      'answer': 2,
-    },
-    {
-      'q': 'The rate of change of displacement is called:',
-      'options': ['Speed', 'Acceleration', 'Velocity', 'Distance'],
-      'answer': 2,
-    },
-    {
-      'q': 'Energy cannot be created or destroyed — this is:',
-      'options': [
-        'Newton\'s 2nd Law',
-        'Conservation of Momentum',
-        'Conservation of Energy',
-        'Ohm\'s Law'
-      ],
-      'answer': 2,
-    },
-  ];
-
   void _selectAnswer(int index) {
     if (_selected != null) return;
     setState(() => _selected = index);
-    if (index == _questions[_current]['answer'] as int) {
+    if (index == widget.questions[_current]['answer'] as int) {
       _score++;
     }
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) {
-        if (_current < _questions.length - 1) {
+        if (_current < widget.questions.length - 1) {
           setState(() {
             _current++;
             _selected = null;
@@ -136,12 +213,15 @@ class _QuizTabState extends State<_QuizTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_quizStarted) return _StartScreen(onStart: () => setState(() => _quizStarted = true));
-    if (_showResult) return _ResultScreen(score: _score, total: _questions.length, onRetry: _restart);
+    if (widget.questions.isEmpty) {
+      return const Center(child: Text('No quizzes available for this book yet.'));
+    }
+    if (!_quizStarted) return _StartScreen(title: widget.bookTitle, qCount: widget.questions.length, onStart: () => setState(() => _quizStarted = true));
+    if (_showResult) return _ResultScreen(score: _score, total: widget.questions.length, onRetry: _restart);
     return _QuizQuestion(
-      question: _questions[_current],
+      question: widget.questions[_current],
       current: _current,
-      total: _questions.length,
+      total: widget.questions.length,
       selected: _selected,
       onSelect: _selectAnswer,
     );
@@ -149,8 +229,10 @@ class _QuizTabState extends State<_QuizTab> {
 }
 
 class _StartScreen extends StatelessWidget {
+  final String title;
+  final int qCount;
   final VoidCallback onStart;
-  const _StartScreen({required this.onStart});
+  const _StartScreen({required this.title, required this.qCount, required this.onStart});
 
   @override
   Widget build(BuildContext context) {
@@ -167,19 +249,15 @@ class _StartScreen extends StatelessWidget {
                 gradient: AppColors.gradientPrimary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.quiz_rounded,
-                  color: Colors.white, size: 48),
+              child: const Icon(Icons.quiz_rounded, color: Colors.white, size: 48),
             ),
             const SizedBox(height: AppTheme.spaceLg),
-            Text('Physics Quiz', style: AppTypography.displaySmall),
+            Text('Quiz: $title', style: AppTypography.displaySmall, textAlign: TextAlign.center),
             const SizedBox(height: AppTheme.spaceSm),
             Text(
-              '5 multiple-choice questions\nTest your knowledge of physics fundamentals',
+              '$qCount multiple-choice questions\nTest your knowledge',
               style: AppTypography.bodyLarge.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
               textAlign: TextAlign.center,
             ),
@@ -242,8 +320,7 @@ class _QuizQuestion extends StatelessWidget {
           const SizedBox(height: AppTheme.space2Xl),
           // Question
           Text('Question ${current + 1}',
-              style: AppTypography.labelMedium
-                  .copyWith(color: AppColors.accent)),
+              style: AppTypography.labelMedium.copyWith(color: AppColors.accent)),
           const SizedBox(height: AppTheme.spaceSm),
           Text(question['q'] as String, style: AppTypography.titleLarge),
           const SizedBox(height: AppTheme.spaceXl),
@@ -267,8 +344,7 @@ class _QuizQuestion extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: bg ?? Theme.of(context).colorScheme.surface,
                   border: Border.all(
-                      color: border ??
-                          Theme.of(context).dividerColor,
+                      color: border ?? Theme.of(context).dividerColor,
                       width: border != null ? 2 : 1),
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
@@ -294,8 +370,7 @@ class _QuizQuestion extends StatelessWidget {
                             child: Text(
                               ['A', 'B', 'C', 'D'][i],
                               style: TextStyle(
-                                color: selected != null &&
-                                        (i == answer || i == selected)
+                                color: selected != null && (i == answer || i == selected)
                                     ? Colors.white
                                     : AppColors.accent,
                                 fontWeight: FontWeight.w700,
@@ -306,15 +381,12 @@ class _QuizQuestion extends StatelessWidget {
                         ),
                         const SizedBox(width: AppTheme.spaceMd),
                         Expanded(
-                          child: Text(options[i],
-                              style: AppTypography.bodyMedium),
+                          child: Text(options[i], style: AppTypography.bodyMedium),
                         ),
                         if (selected != null && i == answer)
-                          const Icon(Icons.check_circle_rounded,
-                              color: AppColors.success)
+                          const Icon(Icons.check_circle_rounded, color: AppColors.success)
                         else if (selected != null && i == selected)
-                          const Icon(Icons.cancel_rounded,
-                              color: AppColors.error),
+                          const Icon(Icons.cancel_rounded, color: AppColors.error),
                       ],
                     ),
                   ),
@@ -332,18 +404,13 @@ class _ResultScreen extends StatelessWidget {
   final int score;
   final int total;
   final VoidCallback onRetry;
-  const _ResultScreen(
-      {required this.score, required this.total, required this.onRetry});
+  const _ResultScreen({required this.score, required this.total, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final pct = score / total;
     final emoji = pct >= 0.8 ? '🎉' : pct >= 0.5 ? '👍' : '📚';
-    final msg = pct >= 0.8
-        ? 'Excellent work!'
-        : pct >= 0.5
-            ? 'Good effort!'
-            : 'Keep practising!';
+    final msg = pct >= 0.8 ? 'Excellent work!' : pct >= 0.5 ? 'Good effort!' : 'Keep practising!';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spaceXl),
@@ -357,10 +424,7 @@ class _ResultScreen extends StatelessWidget {
             Text(
               'You scored $score out of $total',
               style: AppTypography.bodyLarge.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: AppTheme.spaceLg),
@@ -373,14 +437,10 @@ class _ResultScreen extends StatelessWidget {
                     value: pct,
                     strokeWidth: 10,
                     color: AppColors.accent,
-                    backgroundColor:
-                        AppColors.accent.withValues(alpha: 0.15),
+                    backgroundColor: AppColors.accent.withValues(alpha: 0.15),
                   ),
                   Center(
-                    child: Text(
-                      '${(pct * 100).toInt()}%',
-                      style: AppTypography.headline,
-                    ),
+                    child: Text('${(pct * 100).toInt()}%', style: AppTypography.headline),
                   ),
                 ],
               ),
@@ -388,8 +448,7 @@ class _ResultScreen extends StatelessWidget {
             const SizedBox(height: AppTheme.space2Xl),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                  onPressed: onRetry, child: const Text('Try Again')),
+              child: ElevatedButton(onPressed: onRetry, child: const Text('Try Again')),
             ),
           ],
         ),
@@ -401,7 +460,8 @@ class _ResultScreen extends StatelessWidget {
 // ── Flashcards Tab ───────────────────────────────────
 
 class _FlashcardsTab extends StatefulWidget {
-  const _FlashcardsTab();
+  final List<Flashcard> cards;
+  const _FlashcardsTab({required this.cards});
 
   @override
   State<_FlashcardsTab> createState() => _FlashcardsTabState();
@@ -409,7 +469,6 @@ class _FlashcardsTab extends StatefulWidget {
 
 class _FlashcardsTabState extends State<_FlashcardsTab>
     with SingleTickerProviderStateMixin {
-  final _cards = Flashcard.demoFlashcards;
   int _index = 0;
   bool _flipped = false;
   late AnimationController _flipController;
@@ -443,7 +502,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
   }
 
   void _next() {
-    if (_index < _cards.length - 1) {
+    if (_index < widget.cards.length - 1) {
       _flipController.reset();
       setState(() {
         _index++;
@@ -464,7 +523,10 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
 
   @override
   Widget build(BuildContext context) {
-    final card = _cards[_index];
+    if (widget.cards.isEmpty) {
+      return const Center(child: Text('No flashcards available for this book yet.'));
+    }
+    final card = widget.cards[_index];
     return Padding(
       padding: const EdgeInsets.all(AppTheme.spaceXl),
       child: Column(
@@ -473,7 +535,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              _cards.length,
+              widget.cards.length,
               (i) => AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -483,19 +545,15 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
                   color: _index == i
                       ? AppColors.accent
                       : AppColors.accent.withValues(alpha: 0.25),
-                  borderRadius:
-                      BorderRadius.circular(AppTheme.radiusFull),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                 ),
               ),
             ),
           ),
           const SizedBox(height: AppTheme.spaceMd),
-          Text('${_index + 1} of ${_cards.length}',
+          Text('${_index + 1} of ${widget.cards.length}',
               style: AppTypography.bodySmall.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
               )),
           const SizedBox(height: AppTheme.spaceLg),
 
@@ -522,8 +580,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
                                 end: Alignment.bottomRight,
                                 colors: [Color(0xFF1A1A1A), Color(0xFF2A2A2A)],
                               ),
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusXl),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusXl),
                         boxShadow: [
                           BoxShadow(
                             color: AppColors.accent.withValues(alpha: 0.2),
@@ -543,8 +600,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
                                   Text(
                                     isFront ? 'FRONT' : 'BACK',
                                     style: TextStyle(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.5),
+                                      color: Colors.white.withValues(alpha: 0.5),
                                       fontSize: 11,
                                       letterSpacing: 2,
                                       fontWeight: FontWeight.w700,
@@ -554,17 +610,13 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
                                   Transform(
                                     transform: isFront
                                         ? Matrix4.identity()
-                                        : (Matrix4.identity()
-                                          ..rotateY(3.14159)),
+                                        : (Matrix4.identity()..rotateY(3.14159)),
                                     alignment: Alignment.center,
                                     child: Text(
                                       isFront ? card.front : card.back,
                                       style: isFront
-                                          ? AppTypography.headline.copyWith(
-                                              color: Colors.white)
-                                          : AppTypography.bodyLarge.copyWith(
-                                              color: Colors.white,
-                                              height: 1.6),
+                                          ? AppTypography.headline.copyWith(color: Colors.white)
+                                          : AppTypography.bodyLarge.copyWith(color: Colors.white, height: 1.6),
                                       textAlign: TextAlign.center,
                                     ),
                                   ),
@@ -594,10 +646,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
           // Tap hint
           Text('Tap card to flip',
               style: AppTypography.bodySmall.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.4),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
               )),
           const SizedBox(height: AppTheme.spaceMd),
 
@@ -612,7 +661,7 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
               ),
               const SizedBox(width: AppTheme.spaceLg),
               ElevatedButton.icon(
-                onPressed: _index < _cards.length - 1 ? _next : null,
+                onPressed: _index < widget.cards.length - 1 ? _next : null,
                 icon: const Text('Next'),
                 label: const Icon(Icons.arrow_forward_rounded, size: 16),
               ),
@@ -627,23 +676,25 @@ class _FlashcardsTabState extends State<_FlashcardsTab>
 // ── Q&A Tab ──────────────────────────────────────────
 
 class _QATab extends StatelessWidget {
-  const _QATab();
+  final List<BookQnA> questions;
+  const _QATab({required this.questions});
 
   @override
   Widget build(BuildContext context) {
-    final questions = Question.demoQuestions;
+    if (questions.isEmpty) {
+      return const Center(child: Text('No Q&A available for this book yet.'));
+    }
     return ListView.separated(
       padding: const EdgeInsets.all(AppTheme.spaceMd),
       itemCount: questions.length,
-      separatorBuilder: (_, __) =>
-          const SizedBox(height: AppTheme.spaceSm),
+      separatorBuilder: (_, __) => const SizedBox(height: AppTheme.spaceSm),
       itemBuilder: (context, i) => _ExpandableQA(q: questions[i]),
     );
   }
 }
 
 class _ExpandableQA extends StatefulWidget {
-  final Question q;
+  final BookQnA q;
   const _ExpandableQA({required this.q});
 
   @override
@@ -667,30 +718,21 @@ class _ExpandableQAState extends State<_ExpandableQA> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.accentSubtle,
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.radiusFull),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                     ),
                     child: Text('Q',
-                        style: AppTypography.labelSmall
-                            .copyWith(color: AppColors.accent)),
+                        style: AppTypography.labelSmall.copyWith(color: AppColors.accent)),
                   ),
                   const SizedBox(width: AppTheme.spaceSm),
                   Expanded(
-                    child: Text(widget.q.questionText,
-                        style: AppTypography.labelMedium),
+                    child: Text(widget.q.question, style: AppTypography.labelMedium),
                   ),
                   Icon(
-                    _open
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.4),
+                    _open ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ],
               ),
@@ -704,30 +746,25 @@ class _ExpandableQAState extends State<_ExpandableQA> {
                       padding: const EdgeInsets.all(AppTheme.spaceMd),
                       decoration: BoxDecoration(
                         color: AppColors.accentSubtle,
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusSm),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: AppColors.accent,
-                              borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusFull),
+                              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                             ),
                             child: Text('A',
-                                style: AppTypography.labelSmall
-                                    .copyWith(color: Colors.white)),
+                                style: AppTypography.labelSmall.copyWith(color: Colors.white)),
                           ),
                           const SizedBox(width: AppTheme.spaceSm),
                           Expanded(
                             child: Text(
-                              widget.q.answerText,
-                              style: AppTypography.bodyMedium
-                                  .copyWith(height: 1.6),
+                              widget.q.answer,
+                              style: AppTypography.bodyMedium.copyWith(height: 1.6),
                             ),
                           ),
                         ],
@@ -735,9 +772,7 @@ class _ExpandableQAState extends State<_ExpandableQA> {
                     ),
                   ],
                 ),
-                crossFadeState: _open
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
+                crossFadeState: _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                 duration: const Duration(milliseconds: 250),
               ),
             ],

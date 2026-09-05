@@ -19,40 +19,61 @@ class FirestoreService {
 
   // ─── Books ──────────────────────────────────────────
 
-  /// Stream all published books (live updates)
-  Stream<List<FirestoreBook>> booksStream() {
-    return _db
-        .collection('books')
-        .where('status', isEqualTo: 'published')
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => FirestoreBook.fromDoc(d)).toList());
-  }
+
 
   /// One-time fetch all published books
   Future<List<FirestoreBook>> getBooks() async {
     try {
       final dio = getIt<ApiService>();
-      final response = await dio.getBooks();
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final List data = response.data['data'];
-        return data.map((json) {
-          return FirestoreBook(
-            id: json['id'],
-            title: json['title'] ?? 'Untitled',
-            author: json['author'] ?? 'Unknown',
-            description: json['description'],
-            url: json['cover_image_url'], // Map cover to url
-            pdfDriveId: json['pdf_google_drive_id'],
-            category: 'General', // Fallback, could map from categoryIds if needed
-            status: json['status'] ?? 'published',
-            language: json['language'] ?? 'English',
-            pages: json['page_count'] ?? 0,
-            createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
-          );
-        }).toList();
+      
+      // Fetch categories to map category IDs to names
+      final categories = await getCategories();
+      final categoryMap = {for (var c in categories) c.id: c.name};
+
+      List<FirestoreBook> allBooks = [];
+      int page = 1;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final response = await dio.getBooks(params: {'page': page, 'limit': 50});
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final List data = response.data['data'];
+          
+          final books = data.map((json) {
+            String categoryName = 'General';
+            if (json['categoryIds'] != null && (json['categoryIds'] as List).isNotEmpty) {
+              final String catId = (json['categoryIds'] as List).first;
+              categoryName = categoryMap[catId] ?? 'General';
+            }
+
+            return FirestoreBook(
+              id: json['id'],
+              title: json['title'] ?? 'Untitled',
+              author: json['author'] ?? 'Unknown',
+              description: json['description'],
+              url: json['cover_image_url'],
+              pdfDriveId: json['pdf_google_drive_id'],
+              category: categoryName,
+              status: json['status'] ?? 'published',
+              language: json['language'] ?? 'English',
+              pages: json['page_count'] ?? 0,
+              createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+            );
+          }).toList();
+          
+          allBooks.addAll(books);
+          
+          final meta = response.data['meta'];
+          if (meta != null && meta['hasMore'] == true) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
       }
-      return [];
+      return allBooks;
     } catch (_) {
       return [];
     }
@@ -65,14 +86,20 @@ class FirestoreService {
       final response = await dio.getBook(id);
       if (response.statusCode == 200 && response.data['success'] == true) {
         final json = response.data['data'];
+        
+        String categoryName = 'General';
+        if (json['categories'] != null && (json['categories'] as List).isNotEmpty) {
+          categoryName = json['categories'][0]['name'] ?? 'General';
+        }
+
         return FirestoreBook(
           id: json['id'],
           title: json['title'] ?? 'Untitled',
           author: json['author'] ?? 'Unknown',
           description: json['description'],
-          url: json['cover_image_url'], // Map cover to url
+          url: json['cover_image_url'],
           pdfDriveId: json['pdf_google_drive_id'],
-          category: 'General', // Fallback
+          category: categoryName,
           status: json['status'] ?? 'published',
           language: json['language'] ?? 'English',
           pages: json['page_count'] ?? 0,
@@ -85,28 +112,48 @@ class FirestoreService {
     }
   }
 
-  /// Stream book Questions and Answers
-  Stream<List<BookQnA>> getBookQnAs(String bookId) {
-    return _db
-        .collection('books')
-        .doc(bookId)
-        .collection('qna')
-        .orderBy('createdAt')
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => BookQnA.fromDoc(d)).toList());
+  /// Get book Questions and Answers
+  Future<List<BookQnA>> getBookQnAs(String bookId) async {
+    try {
+      final dio = getIt<ApiService>();
+      
+      List<BookQnA> allQnAs = [];
+      int page = 1;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final response = await dio.getQuestions(bookId, params: {'page': page, 'limit': 50});
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final List data = response.data['data'];
+          allQnAs.addAll(data.map((json) => BookQnA.fromApiJson(json)).toList());
+          
+          final meta = response.data['meta'];
+          if (meta != null && meta['hasMore'] == true) {
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+      return allQnAs;
+    } catch (_) {
+      return [];
+    }
   }
 
   // ─── Categories ─────────────────────────────────────
 
-  Stream<List<FirestoreCategory>> categoriesStream() {
-    return _db.collection('categories').snapshots().map((snap) =>
-        snap.docs.map((d) => FirestoreCategory.fromDoc(d)).toList());
-  }
-
   Future<List<FirestoreCategory>> getCategories() async {
     try {
-      final snap = await _db.collection('categories').get();
-      return snap.docs.map((d) => FirestoreCategory.fromDoc(d)).toList();
+      final dio = getIt<ApiService>();
+      final response = await dio.getCategories();
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final List data = response.data['data'];
+        return data.map((json) => FirestoreCategory.fromApiJson(json)).toList();
+      }
+      return FirestoreCategory.defaults;
     } catch (_) {
       return FirestoreCategory.defaults;
     }
@@ -367,6 +414,15 @@ class FirestoreCategory {
       name: d['name'] as String? ?? 'Unknown',
       emoji: d['emoji'] as String? ?? '📚',
       description: d['description'] as String?,
+    );
+  }
+
+  factory FirestoreCategory.fromApiJson(Map<String, dynamic> json) {
+    return FirestoreCategory(
+      id: json['id'],
+      name: json['name'] ?? 'Unknown',
+      emoji: json['emoji'] ?? '📚',
+      description: json['description'],
     );
   }
 
