@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:workers\"",
     "dev:frontend": "astro dev",
-    "dev:workers": "cd workers && npx wrangler dev",
+    "dev:workers": "cd workers && npx wrangler dev --config wrangler.toml",
     "build": "astro build",
     "preview": "astro preview",
     "lint": "npx eslint src/",

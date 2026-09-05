@@ -801,8 +801,9 @@ async function handleAdminGetQuizzes(bookId, admin, env) {
   const quizzes = await env.DB.prepare("SELECT * FROM quizzes WHERE book_id = ?").bind(bookId).all();
   
   for (const quiz of (quizzes.results || [])) {
-    const qc = await env.DB.prepare('SELECT COUNT(*) as c FROM quiz_questions WHERE quiz_id = ?').bind(quiz.id).first();
-    quiz.questionCount = qc.c;
+    const questions = await env.DB.prepare('SELECT question_id FROM quiz_questions WHERE quiz_id = ? ORDER BY question_order').bind(quiz.id).all();
+    quiz.questionIds = questions.results.map(q => q.question_id);
+    quiz.questionCount = quiz.questionIds.length;
   }
   
   return successResponse(quizzes.results || []);
@@ -810,8 +811,8 @@ async function handleAdminGetQuizzes(bookId, admin, env) {
 
 async function handleAdminCreateQuiz(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  if (!body.title || !body.questionIds?.length) {
-    throw { status: 400, code: 'VALIDATION_ERROR', message: 'title and questionIds required' };
+  if (!body.title) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'title required' };
   }
   
   const id = generateId();
@@ -820,8 +821,10 @@ async function handleAdminCreateQuiz(body, admin, env) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.subjectId || null, body.timeLimitSeconds || null, body.randomize !== false ? 1 : 0, body.showExplanation !== false ? 1 : 0, body.passingScorePercent || 60, body.difficulty || 'MIXED', body.status || 'DRAFT', admin.adminId).run();
   
-  for (let i = 0; i < body.questionIds.length; i++) {
-    await env.DB.prepare('INSERT INTO quiz_questions (quiz_id, question_id, question_order) VALUES (?, ?, ?)').bind(id, body.questionIds[i], i).run();
+  if (Array.isArray(body.questionIds) && body.questionIds.length > 0) {
+    for (let i = 0; i < body.questionIds.length; i++) {
+      await env.DB.prepare('INSERT INTO quiz_questions (quiz_id, question_id, question_order) VALUES (?, ?, ?)').bind(id, body.questionIds[i], i).run();
+    }
   }
   
   await auditLog(env, admin.adminId, 'CREATE', 'quiz', id);

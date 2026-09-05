@@ -4,6 +4,7 @@
 window.AdminQuizzes = (() => {
 
   let currentBookId = null;
+  let currentBookQuestions = [];
 
   async function render(container) {
     container.innerHTML = `
@@ -58,9 +59,19 @@ window.AdminQuizzes = (() => {
     const container = document.getElementById('quizzes-container');
     if (!bookId) {
       container.classList.add('hidden');
+      currentBookQuestions = [];
       return;
     }
     container.classList.remove('hidden');
+    
+    try {
+      const res = await ApiClient.admin.getQuestions(bookId);
+      currentBookQuestions = res.data || [];
+    } catch (e) {
+      console.error('Failed to fetch questions for book', e);
+      currentBookQuestions = [];
+    }
+
     loadQuizzes();
   }
 
@@ -89,7 +100,7 @@ window.AdminQuizzes = (() => {
               </div>
             </div>
             <div class="flex gap-sm">
-              <button class="btn btn-ghost btn-sm" onclick="AdminQuizzes.showEditQuizModal('${q.id}', '${escapeHtml(q.title.replace(/'/g, "\\'"))}', '${escapeHtml((q.description||'').replace(/'/g, "\\'"))}', ${q.time_limit_seconds || 0}, ${q.passing_score_percent || 70}, '${q.status}')">
+              <button class="btn btn-ghost btn-sm" onclick="AdminQuizzes.showEditQuizModal('${q.id}', '${escapeHtml(q.title.replace(/'/g, "\\'"))}', '${escapeHtml((q.description||'').replace(/'/g, "\\'"))}', ${q.time_limit_seconds || 0}, ${q.passing_score_percent || 70}, '${q.status}', '${(q.questionIds || []).join(',')}')">
                 <span class="material-symbols-outlined" style="font-size:18px">edit</span>
               </button>
               <button class="btn btn-ghost btn-sm" style="color:var(--error);" onclick="AdminQuizzes.deleteQuiz('${q.id}')">
@@ -104,7 +115,7 @@ window.AdminQuizzes = (() => {
     }
   }
 
-  function getQuizFormHtml(title = '', desc = '', time = 0, pass = 70, status = 'PUBLISHED') {
+  function getQuizFormHtml(title = '', desc = '', time = 0, pass = 70, status = 'PUBLISHED', selectedQuestionIds = []) {
     return `
       <div class="form-group mb-sm">
         <label class="form-label">Title *</label>
@@ -131,6 +142,22 @@ window.AdminQuizzes = (() => {
           <option value="PUBLISHED" ${status === 'PUBLISHED' ? 'selected' : ''}>Published</option>
         </select>
       </div>
+      <div class="form-group mb-sm">
+        <label class="form-label mb-xs block">Questions</label>
+        ${currentBookQuestions.length === 0 ? '<div class="text-body-small text-secondary">No questions available in this book.</div>' : `
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px;">
+            ${currentBookQuestions.map(q => {
+              const checked = selectedQuestionIds.includes(q.id) ? 'checked' : '';
+              return `
+                <label class="flex items-center gap-sm mb-xs" style="cursor: pointer;">
+                  <input type="checkbox" class="quiz-question-cb" value="${q.id}" ${checked}>
+                  <span class="text-body-small">${escapeHtml(q.text.substring(0, 80))}${q.text.length > 80 ? '...' : ''} <span class="text-secondary" style="font-size: 10px;">(${q.type})</span></span>
+                </label>
+              `;
+            }).join('')}
+          </div>
+        `}
+      </div>
     `;
   }
 
@@ -141,6 +168,8 @@ window.AdminQuizzes = (() => {
       const time = parseInt(document.getElementById('quiz-time').value) || 0;
       const pass = parseInt(document.getElementById('quiz-pass').value) || 70;
       const status = document.getElementById('quiz-status').value;
+      const questionCbs = document.querySelectorAll('.quiz-question-cb:checked');
+      const questionIds = Array.from(questionCbs).map(cb => cb.value);
 
       if (!title) {
         Toast.error('Title is required');
@@ -149,7 +178,7 @@ window.AdminQuizzes = (() => {
 
       try {
         await ApiClient.admin.createQuiz(currentBookId, {
-          title, description: desc, timeLimitSeconds: time, passingScorePercent: pass, status
+          title, description: desc, timeLimitSeconds: time, passingScorePercent: pass, status, questionIds
         });
         Toast.success('Quiz created');
         loadQuizzes();
@@ -161,13 +190,16 @@ window.AdminQuizzes = (() => {
     });
   }
 
-  function showEditQuizModal(id, title, desc, time, pass, status) {
-    Modal.form('Edit Quiz', getQuizFormHtml(title, desc, time, pass, status), async () => {
+  function showEditQuizModal(id, title, desc, time, pass, status, questionIdsStr) {
+    const selectedQuestionIds = questionIdsStr ? questionIdsStr.split(',') : [];
+    Modal.form('Edit Quiz', getQuizFormHtml(title, desc, time, pass, status, selectedQuestionIds), async () => {
       const newTitle = document.getElementById('quiz-title').value.trim();
       const newDesc = document.getElementById('quiz-desc').value.trim();
       const newTime = parseInt(document.getElementById('quiz-time').value) || 0;
       const newPass = parseInt(document.getElementById('quiz-pass').value) || 70;
       const newStatus = document.getElementById('quiz-status').value;
+      const questionCbs = document.querySelectorAll('.quiz-question-cb:checked');
+      const questionIds = Array.from(questionCbs).map(cb => cb.value);
 
       if (!newTitle) {
         Toast.error('Title is required');
@@ -176,7 +208,7 @@ window.AdminQuizzes = (() => {
 
       try {
         await ApiClient.admin.updateQuiz(currentBookId, id, {
-          title: newTitle, description: newDesc, timeLimitSeconds: newTime, passingScorePercent: newPass, status: newStatus
+          title: newTitle, description: newDesc, timeLimitSeconds: newTime, passingScorePercent: newPass, status: newStatus, questionIds
         });
         Toast.success('Quiz updated');
         loadQuizzes();
