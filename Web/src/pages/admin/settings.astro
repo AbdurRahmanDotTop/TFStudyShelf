@@ -6,15 +6,87 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     <div class="admin-page-header">
       <div>
         <h1 class="admin-page-header__title">Settings</h1>
-        <p class="admin-page-header__subtitle">System configuration and feature flags</p>
+        <p class="admin-page-header__subtitle">System configuration and app links</p>
       </div>
     </div>
-    <div class="card" style="text-align:center;padding:var(--space-3xl)">
-      <div class="empty-state__icon" style="margin:0 auto var(--space-md)">
-        <span class="material-symbols-outlined" style="font-size:28px">settings</span>
-      </div>
-      <h3 class="text-title-large mb-sm">Coming Next</h3>
-      <p class="text-body-medium text-secondary">System configuration and feature flags. This page will be implemented in the next phase.</p>
+    <div class="card" style="padding:var(--space-xl)">
+      <h3 class="text-title-large mb-md">App Download Links</h3>
+      <p class="text-body-medium text-secondary mb-xl">Configure the download links shown to users when they try to access restricted content on the web app.</p>
+      
+      <form id="settings-form" class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="android_link">Android App Link (Play Store / APK)</label>
+          <input type="url" class="form-input" id="android_link" name="android_link" placeholder="https://play.google.com/..." required />
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="ios_link">iOS App Link (App Store)</label>
+          <input type="url" class="form-input" id="ios_link" name="ios_link" placeholder="https://apps.apple.com/..." />
+        </div>
+
+        <div class="form-actions" style="margin-top: var(--space-xl)">
+          <button type="submit" class="btn btn-primary" id="btn-save-settings">
+            <span class="material-symbols-outlined btn-icon">save</span>
+            Save Settings
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+
+  <script type="module" is:inline>
+    import { api } from '/js/api/client.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const form = document.getElementById('settings-form');
+      const btnSave = document.getElementById('btn-save-settings');
+      
+      // Load existing config
+      try {
+        const response = await api.get('/admin/config');
+        if (response.success && response.data) {
+          const configs = response.data;
+          const androidConfig = configs.find(c => c.key === 'android_app_link');
+          const iosConfig = configs.find(c => c.key === 'ios_app_link');
+          
+          if (androidConfig) document.getElementById('android_link').value = androidConfig.value;
+          if (iosConfig) document.getElementById('ios_link').value = iosConfig.value;
+        }
+      } catch (e) {
+        console.error('Failed to load settings', e);
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const androidLink = document.getElementById('android_link').value;
+        const iosLink = document.getElementById('ios_link').value;
+        
+        const originalText = btnSave.innerHTML;
+        btnSave.innerHTML = '<span class="material-symbols-outlined btn-icon spin">refresh</span> Saving...';
+        btnSave.disabled = true;
+
+        try {
+          const res = await api.put('/admin/config', {
+            configs: [
+              { key: 'android_app_link', value: androidLink, description: 'Google Play Store link or direct APK link' },
+              { key: 'ios_app_link', value: iosLink, description: 'Apple App Store link' }
+            ]
+          });
+
+          if (res.success) {
+            alert('Settings saved successfully!');
+          } else {
+            alert('Failed to save settings: ' + (res.error?.message || 'Unknown error'));
+          }
+        } catch (e) {
+          alert('An error occurred while saving settings.');
+          console.error(e);
+        } finally {
+          btnSave.innerHTML = originalText;
+          btnSave.disabled = false;
+        }
+      });
+    });
+  </script>
 </AdminLayout>

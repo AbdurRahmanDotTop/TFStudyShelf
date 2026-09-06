@@ -51,6 +51,78 @@ CREATE INDEX IF NOT EXISTS idx_books_created ON books(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_books_published ON books(published_at DESC) WHERE status = 'PUBLISHED';
 CREATE INDEX IF NOT EXISTS idx_books_rating ON books(rating DESC);
 
+-- ─── Courses ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS courses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  description TEXT NOT NULL,
+  cover_image_url TEXT,
+  course_type TEXT NOT NULL DEFAULT 'Self Paced' CHECK (course_type IN ('Self Paced', 'Instructor Led', 'Cohort', 'Hybrid', 'Certification')),
+  visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private', 'unlisted')),
+  is_free INTEGER NOT NULL DEFAULT 0,
+  price REAL DEFAULT 0,
+  currency TEXT DEFAULT 'USD',
+  enrollment_count INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED', 'ARCHIVED')),
+  certificate_enabled INTEGER NOT NULL DEFAULT 0,
+  completion_rules TEXT,
+  prerequisites TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  published_at TEXT,
+  created_by TEXT NOT NULL DEFAULT 'system'
+);
+
+CREATE INDEX IF NOT EXISTS idx_courses_status ON courses(status);
+CREATE INDEX IF NOT EXISTS idx_courses_visibility ON courses(visibility);
+CREATE INDEX IF NOT EXISTS idx_courses_created ON courses(created_at DESC);
+
+-- ─── Course Junction Tables ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_categories (
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (course_id, category_id)
+);
+
+CREATE TABLE IF NOT EXISTS course_subjects (
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  PRIMARY KEY (course_id, subject_id)
+);
+
+-- ─── Course Curriculum (Sections & Lessons) ───────────────────
+CREATE TABLE IF NOT EXISTS course_sections (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_sections_course ON course_sections(course_id);
+
+CREATE TABLE IF NOT EXISTS course_lessons (
+  id TEXT PRIMARY KEY,
+  section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  lesson_type TEXT NOT NULL CHECK (lesson_type IN ('VIDEO', 'AUDIO', 'ARTICLE', 'PDF', 'DOCUMENT', 'PRESENTATION', 'QUIZ', 'ASSIGNMENT', 'EXAM', 'CODING_EXERCISE', 'MIXED_MEDIA')),
+  content TEXT,
+  summary TEXT,
+  is_free_preview INTEGER NOT NULL DEFAULT 0,
+  duration_minutes INTEGER DEFAULT 0,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_lessons_section ON course_lessons(section_id);
+CREATE INDEX IF NOT EXISTS idx_course_lessons_course ON course_lessons(course_id);
+
 -- ─── Categories ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
@@ -427,3 +499,247 @@ END;
 CREATE TRIGGER IF NOT EXISTS ad_units_updated_at AFTER UPDATE ON ad_units BEGIN
   UPDATE ad_units SET updated_at = datetime('now') WHERE id = new.id;
 END;
+
+CREATE TRIGGER IF NOT EXISTS course_sections_updated_at AFTER UPDATE ON course_sections BEGIN
+  UPDATE course_sections SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS course_lessons_updated_at AFTER UPDATE ON course_lessons BEGIN
+  UPDATE course_lessons SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+-- ─── Course Assessments (Quizzes/Exams) ──────────────────────
+CREATE TABLE IF NOT EXISTS course_assessments (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  assessment_type TEXT NOT NULL DEFAULT 'QUIZ' CHECK (assessment_type IN ('QUIZ', 'EXAM', 'PRACTICE_TEST')),
+  time_limit_seconds INTEGER,
+  passing_score_percent INTEGER DEFAULT 60,
+  randomize INTEGER NOT NULL DEFAULT 1,
+  show_explanation INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_by TEXT NOT NULL DEFAULT 'system'
+);
+CREATE TRIGGER IF NOT EXISTS course_assessments_updated_at AFTER UPDATE ON course_assessments BEGIN
+  UPDATE course_assessments SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+-- ─── Course Assignments ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_assignments (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  due_date TEXT,
+  max_attempts INTEGER DEFAULT 1,
+  passing_criteria TEXT,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_by TEXT NOT NULL DEFAULT 'system'
+);
+CREATE TRIGGER IF NOT EXISTS course_assignments_updated_at AFTER UPDATE ON course_assignments BEGIN
+  UPDATE course_assignments SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+-- ─── Course Projects ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_projects (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  objectives TEXT,
+  submission_type TEXT NOT NULL DEFAULT 'FILE',
+  evaluation_criteria TEXT,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS course_projects_updated_at AFTER UPDATE ON course_projects BEGIN
+  UPDATE course_projects SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+-- ─── Course Resources ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_resources (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
+  lesson_id TEXT REFERENCES course_lessons(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  url TEXT NOT NULL,
+  download_allowed INTEGER NOT NULL DEFAULT 1,
+  display_order INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 5: Course Question Bank & Interactive Content ───
+
+-- ─── Course Questions ───
+CREATE TABLE IF NOT EXISTS course_questions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  assessment_id TEXT REFERENCES course_assessments(id) ON DELETE SET NULL,
+  question_text TEXT NOT NULL,
+  question_type TEXT NOT NULL, -- MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER
+  options TEXT, -- JSON array of options for multiple choice
+  correct_answer TEXT NOT NULL, -- Text matching an option, or exact answer
+  explanation TEXT,
+  points INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── Course Coding Lessons ───
+CREATE TABLE IF NOT EXISTS course_coding_lessons (
+  id TEXT PRIMARY KEY,
+  lesson_id TEXT NOT NULL UNIQUE REFERENCES course_lessons(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  starter_code TEXT,
+  test_cases TEXT, -- JSON array of test cases
+  solution_code TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── Course Live Sessions ───
+CREATE TABLE IF NOT EXISTS course_live_sessions (
+  id TEXT PRIMARY KEY,
+  lesson_id TEXT NOT NULL UNIQUE REFERENCES course_lessons(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  meeting_url TEXT,
+  start_time TEXT, -- ISO string
+  duration_minutes INTEGER,
+  host_info TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 6: Learner Progress, Enrollment & Interactive Features ───
+
+-- ─── Enrollments ───
+CREATE TABLE IF NOT EXISTS enrollments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'DROPPED', 'EXPIRED')),
+  enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  UNIQUE(user_id, course_id)
+);
+
+-- ─── Learner Progress ───
+CREATE TABLE IF NOT EXISTS course_progress (
+  id TEXT PRIMARY KEY,
+  enrollment_id TEXT NOT NULL UNIQUE REFERENCES enrollments(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  progress_percent INTEGER NOT NULL DEFAULT 0,
+  last_accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS course_progress_updated_at AFTER UPDATE ON course_progress BEGIN
+  UPDATE course_progress SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+CREATE TABLE IF NOT EXISTS lesson_progress (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL REFERENCES course_lessons(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'NOT_STARTED' CHECK (status IN ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED')),
+  time_spent_seconds INTEGER NOT NULL DEFAULT 0,
+  last_accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  UNIQUE(user_id, lesson_id)
+);
+
+-- ─── Certificates ───
+CREATE TABLE IF NOT EXISTS certificates (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  certificate_number TEXT NOT NULL UNIQUE,
+  issued_at TEXT NOT NULL DEFAULT (datetime('now')),
+  verification_url TEXT,
+  status TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED', 'REVOKED')),
+  UNIQUE(user_id, course_id)
+);
+
+-- ─── Discussions ───
+CREATE TABLE IF NOT EXISTS discussions (
+  id TEXT PRIMARY KEY,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  lesson_id TEXT REFERENCES course_lessons(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'LOCKED', 'HIDDEN', 'DELETED')),
+  is_pinned INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS discussions_updated_at AFTER UPDATE ON discussions BEGIN
+  UPDATE discussions SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+CREATE TABLE IF NOT EXISTS discussion_posts (
+  id TEXT PRIMARY KEY,
+  discussion_id TEXT NOT NULL REFERENCES discussions(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_instructor_reply INTEGER NOT NULL DEFAULT 0,
+  is_solution INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'PUBLISHED' CHECK (status IN ('PUBLISHED', 'HIDDEN', 'DELETED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS discussion_posts_updated_at AFTER UPDATE ON discussion_posts BEGIN
+  UPDATE discussion_posts SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+-- ─── Learner Notes & Bookmarks ───
+CREATE TABLE IF NOT EXISTS learner_notes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL REFERENCES course_lessons(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  video_timestamp_seconds INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS learner_notes_updated_at AFTER UPDATE ON learner_notes BEGIN
+  UPDATE learner_notes SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+CREATE TABLE IF NOT EXISTS learner_bookmarks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  lesson_id TEXT NOT NULL REFERENCES course_lessons(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, lesson_id)
+);
+
+-- ─── Learning Paths ───
+CREATE TABLE IF NOT EXISTS learning_paths (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS learning_paths_updated_at AFTER UPDATE ON learning_paths BEGIN
+  UPDATE learning_paths SET updated_at = datetime('now') WHERE id = new.id;
+END;
+
+CREATE TABLE IF NOT EXISTS learning_path_courses (
+  path_id TEXT NOT NULL REFERENCES learning_paths(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  is_mandatory INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (path_id, course_id)
+);

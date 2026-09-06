@@ -11,7 +11,8 @@
     "deploy:production": "npx wrangler deploy --env production",
     "db:migrate": "npx wrangler d1 execute tf-study-shelf-db --local --file=src/db/schema.sql",
     "db:seed": "npx wrangler d1 execute tf-study-shelf-db --local --file=src/db/seed.sql",
-    "tail": "npx wrangler tail"
+    "tail": "npx wrangler tail",
+    "test": "node test-runner.mjs"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"

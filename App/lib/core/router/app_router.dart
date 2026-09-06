@@ -7,6 +7,7 @@ import '../../features/auth/view/signup_page.dart';
 import '../../features/home/view/home_page.dart';
 import '../../features/explore/view/explore_page.dart';
 import '../../features/book_detail/view/book_detail_page.dart';
+import '../../features/course_detail/view/course_detail_page.dart';
 import '../../features/reader/view/reader_page.dart';
 import '../../features/reader/view/pdf_reader_page.dart';
 import '../../features/reader/view/structured_reader_page.dart';
@@ -96,6 +97,12 @@ class AppRouter {
         path: '/book/:id',
         builder: (context, state) => BookDetailPage(
           bookId: state.pathParameters['id'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/course/:id',
+        builder: (context, state) => CourseDetailPage(
+          courseId: state.pathParameters['id'] ?? '',
         ),
       ),
       GoRoute(

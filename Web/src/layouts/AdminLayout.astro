@@ -78,23 +78,8 @@ const { title = "TF Study Shelf — Admin Panel" } = Astro.props;
         <a href="/admin/books" class="admin-sidebar__link" data-page="books">
           <span class="material-symbols-outlined icon">menu_book</span> Books
         </a>
-        <a href="/admin/chapters" class="admin-sidebar__link" data-page="chapters">
-          <span class="material-symbols-outlined icon">format_list_numbered</span> Chapters
-        </a>
-        <a href="/admin/questions" class="admin-sidebar__link" data-page="questions">
-          <span class="material-symbols-outlined icon">help_outline</span> Questions
-        </a>
-        <a href="/admin/quizzes" class="admin-sidebar__link" data-page="quizzes">
-          <span class="material-symbols-outlined icon">quiz</span> Quizzes
-        </a>
-        <a href="/admin/flashcards" class="admin-sidebar__link" data-page="flashcards">
-          <span class="material-symbols-outlined icon">style</span> Flashcards
-        </a>
-        <a href="/admin/categories" class="admin-sidebar__link" data-page="categories">
-          <span class="material-symbols-outlined icon">category</span> Categories
-        </a>
-        <a href="/admin/languages" class="admin-sidebar__link" data-page="languages">
-          <span class="material-symbols-outlined icon">language</span> Languages
+        <a href="/admin/courses" class="admin-sidebar__link" data-page="courses">
+          <span class="material-symbols-outlined icon">school</span> Courses
         </a>
 
         <div class="admin-sidebar__section-label">Management</div>
@@ -317,9 +302,11 @@ const { title = "TF Study Shelf — Admin Panel" } = Astro.props;
     window.AdminApp = {
       navigate: function(page, params = {}) {
         let url = '/admin/' + (page === 'dashboard' ? '' : page);
-        // Special case for books editor
+        // Special case for books and courses editors
         if (page === 'books' && (params.action === 'new' || params.action === 'edit')) {
           url = '/admin/book-editor';
+        } else if (page === 'courses' && (params.action === 'new' || params.action === 'edit')) {
+          url = '/admin/course-editor';
         }
         
         const searchParams = new URLSearchParams(params);

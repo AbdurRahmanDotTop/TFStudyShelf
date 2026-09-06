@@ -6,6 +6,7 @@ import 'package:tf_study_shelf/core/services/download_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -51,9 +52,16 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
         // 2. Fetch from network
         final api = ApiService();
         final res = await api.getChapters(widget.bookId);
-        if (res.statusCode == 200) {
-          final List<dynamic> data = res.data;
-          _chapters = data.map((e) => Chapter.fromJson(e)).toList();
+        if (res.statusCode == 200 && res.data != null) {
+          dynamic responseData = res.data;
+          List<dynamic> dataList = [];
+          if (responseData is Map && responseData.containsKey('data')) {
+            dataList = responseData['data'] as List<dynamic>;
+          } else if (responseData is List) {
+            dataList = responseData;
+          }
+          
+          _chapters = dataList.map((e) => Chapter.fromJson(e)).toList();
           
           // Optionally save to cache here or rely on DownloadService
         } else {
@@ -257,13 +265,13 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
             imageUrl: block.url,
             placeholder: (context, url) => Container(
               height: 200,
-              color: Colors.grey[100],
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
               child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
             errorWidget: (context, url, error) => Container(
               padding: const EdgeInsets.all(32),
-              color: Colors.grey[100],
-              child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 48)),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+              child: Center(child: Icon(Icons.broken_image, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 48)),
             ),
             fit: BoxFit.cover,
             width: double.infinity,
@@ -300,8 +308,16 @@ class _StructuredReaderPageState extends State<StructuredReaderPage> {
               style: FilledButton.styleFrom(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onPressed: () {
-                // TODO: Navigate to PDF view
+              onPressed: () async {
+                final uri = Uri.tryParse(block.url);
+                if (uri != null && await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Could not open PDF viewer')));
+                  }
+                }
               },
             ),
           ],
@@ -354,8 +370,12 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     }
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.grey[200],
-      child: const Center(child: Text('Video placeholder (Non-YouTube)')),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+      child: Center(
+        child: Text('Unsupported video format',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ),
     );
   }
 }

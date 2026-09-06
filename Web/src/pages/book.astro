@@ -65,9 +65,9 @@ import UserLayout from '../layouts/UserLayout.astro';
                   ${(book.categories || []).map(c => '<span class="chip chip-outline" style="font-size:11px">' + c.name + '</span>').join('')}
                 </div>
                 <div class="book-detail__actions">
-                  <a class="btn btn-gradient btn-lg" href="/read?url=${encodeURIComponent(book.url || '')}&title=${encodeURIComponent(book.title)}" ${!book.url ? 'disabled style="pointer-events:none;opacity:0.5"' : ''} style="text-decoration:none">
+                  <button class="btn btn-gradient btn-lg" onclick="showAppDownloadPopup()">
                     <span class="material-symbols-outlined" style="font-size:20px">auto_stories</span> Read Now
-                  </a>
+                  </button>
                   <button class="btn btn-secondary">
                     <span class="material-symbols-outlined" style="font-size:18px">favorite_border</span> Save
                   </button>
@@ -141,6 +141,29 @@ import UserLayout from '../layouts/UserLayout.astro';
               '</div>'
              : ''}
           </div>
+          
+          <!-- App Download Popup -->
+          <div id="app-download-modal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+            <div class="modal-content card" style="max-width:400px; width:90%; padding:24px; position:relative;">
+              <button onclick="closeAppDownloadPopup()" style="position:absolute; top:12px; right:12px; background:none; border:none; cursor:pointer;">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+              <div style="text-align:center; margin-bottom:16px;">
+                <span class="material-symbols-outlined" style="font-size:48px; color:var(--primary)">app_shortcut</span>
+              </div>
+              <h3 class="text-title-medium" style="text-align:center; margin-bottom:12px;">App Download Required</h3>
+              <p class="text-body-medium text-secondary" style="text-align:center; margin-bottom:24px;">To read this book / enroll in this course, please download our mobile app.</p>
+              
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <a id="android-download-btn" href="#" class="btn btn-primary" style="display:flex; justify-content:center; align-items:center; gap:8px;" target="_blank">
+                  <span class="material-symbols-outlined">android</span> Download Android App
+                </a>
+                <a id="ios-download-btn" href="#" class="btn btn-secondary" style="display:flex; justify-content:center; align-items:center; gap:8px;" target="_blank">
+                  <span class="material-symbols-outlined">apple</span> Download iOS App
+                </a>
+              </div>
+            </div>
+          </div>
         `;
       } catch (err) {
         container.innerHTML = `
@@ -152,5 +175,41 @@ import UserLayout from '../layouts/UserLayout.astro';
           </div>`;
       }
     });
+
+    window.showAppDownloadPopup = async function() {
+      const modal = document.getElementById('app-download-modal');
+      const androidBtn = document.getElementById('android-download-btn');
+      const iosBtn = document.getElementById('ios-download-btn');
+      
+      // Fetch dynamic links
+      try {
+        const res = await fetch('https://api.techilyfly.com/api/v1/config');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) {
+            if (data.data.android_app_link) {
+              androidBtn.href = data.data.android_app_link;
+              androidBtn.style.display = 'flex';
+            } else {
+              androidBtn.style.display = 'none';
+            }
+            if (data.data.ios_app_link) {
+              iosBtn.href = data.data.ios_app_link;
+              iosBtn.style.display = 'flex';
+            } else {
+              iosBtn.style.display = 'none';
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch app links', e);
+      }
+      
+      modal.style.display = 'flex';
+    };
+
+    window.closeAppDownloadPopup = function() {
+      document.getElementById('app-download-modal').style.display = 'none';
+    };
   </script>
 </UserLayout>

@@ -472,6 +472,765 @@ async function handleGetFlashcardSet(setId, env) {
   return successResponse(set);
 }
 
+// ─── Courses API (Public & Admin) ─────────────────
+
+async function handleGetCourses(params, env) {
+  const page = parseInt(params.page) || 1;
+  const limit = Math.min(parseInt(params.limit) || 20, 50);
+  const offset = (page - 1) * limit;
+  
+  let where = "status = 'PUBLISHED' AND visibility = 'public'";
+  const binds = [];
+  
+  if (params.category) {
+    where += ' AND id IN (SELECT course_id FROM course_categories WHERE category_id = ?)';
+    binds.push(params.category);
+  }
+  if (params.subject) {
+    where += ' AND id IN (SELECT course_id FROM course_subjects WHERE subject_id = ?)';
+    binds.push(params.subject);
+  }
+
+  let orderBy = 'created_at DESC';
+  
+  const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM courses WHERE ${where}`);
+  const dataStmt = env.DB.prepare(`SELECT * FROM courses WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`);
+  
+  const boundCount = binds.length > 0 ? countStmt.bind(...binds) : countStmt;
+  const boundData = binds.length > 0 ? dataStmt.bind(...binds, limit, offset) : dataStmt.bind(limit, offset);
+  
+  const [countResult, dataResult] = await Promise.all([boundCount.first(), boundData.all()]);
+  
+  const total = countResult.total;
+  const courses = dataResult.results || [];
+  
+  return successResponse(courses, { page, limit, total, hasMore: offset + limit < total });
+}
+
+async function handleGetCourse(courseId, env) {
+  const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  if (!course) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
+  
+  return successResponse(course);
+}
+
+async function handleAdminGetCourses(params, admin, env) {
+  const page = parseInt(params.page) || 1;
+  const limit = Math.min(parseInt(params.limit) || 20, 50);
+  const offset = (page - 1) * limit;
+  
+  let where = "1=1";
+  const binds = [];
+  
+  if (params.search) {
+    where += ' AND title LIKE ?';
+    binds.push(`%${params.search}%`);
+  }
+  if (params.status) {
+    where += ' AND status = ?';
+    binds.push(params.status);
+  }
+  
+  const total = (await env.DB.prepare(`SELECT COUNT(*) as c FROM courses WHERE ${where}`).bind(...binds).first()).c;
+  const courses = await env.DB.prepare(`SELECT * FROM courses WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
+  
+  return successResponse(courses.results || [], { page, limit, total, hasMore: offset + limit < total });
+}
+
+async function handleAdminCreateCourse(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  
+  if (!body.title || !body.description) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'Title and description are required' };
+  }
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO courses (id, title, subtitle, description, cover_image_url, course_type, visibility,
+      is_free, price, currency, status, certificate_enabled, completion_rules, prerequisites, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, body.title, body.subtitle || null, body.description, body.coverImageUrl || null,
+    body.courseType || 'Self Paced', body.visibility || 'public',
+    body.isFree ? 1 : 0, body.price || 0, body.currency || 'USD',
+    body.status || 'DRAFT', body.certificateEnabled ? 1 : 0, body.completionRules || null, body.prerequisites || null, admin.adminId
+  ).run();
+  
+  await auditLog(env, admin.adminId, 'CREATE', 'course', id, { title: body.title });
+  
+  const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(id).first();
+  return successResponse(course);
+}
+
+async function handleAdminUpdateCourse(courseId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  
+  const existing = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  if (!existing) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
+  
+  const fields = [];
+  const values = [];
+  
+  const updateFields = {
+    title: 'title', subtitle: 'subtitle', description: 'description',
+    coverImageUrl: 'cover_image_url', courseType: 'course_type',
+    visibility: 'visibility', price: 'price', currency: 'currency',
+    status: 'status', completionRules: 'completion_rules', prerequisites: 'prerequisites'
+  };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) {
+      fields.push(`${dbKey} = ?`);
+      values.push(body[jsKey]);
+    }
+  }
+
+  if (body.certificateEnabled !== undefined) {
+    fields.push('certificate_enabled = ?');
+    values.push(body.certificateEnabled ? 1 : 0);
+  }
+  
+  if (body.isFree !== undefined) { fields.push('is_free = ?'); values.push(body.isFree ? 1 : 0); }
+  
+  if (body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
+    fields.push("published_at = datetime('now')");
+  }
+  
+  if (fields.length > 0) {
+    values.push(courseId);
+    await env.DB.prepare(`UPDATE courses SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE', 'course', courseId);
+  const updated = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourse(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  if (!course) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
+  
+  await env.DB.prepare('DELETE FROM courses WHERE id = ?').bind(courseId).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'course', courseId, { title: course.title });
+  return successResponse({ deleted: true });
+}
+
+async function handleAdminPublishCourse(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  if (!course) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
+  
+  await env.DB.prepare("UPDATE courses SET status = 'PUBLISHED', published_at = datetime('now') WHERE id = ?").bind(courseId).run();
+  await auditLog(env, admin.adminId, 'PUBLISH', 'course', courseId, { title: course.title });
+  return successResponse({ published: true });
+}
+
+async function handleAdminUnpublishCourse(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
+  if (!course) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
+  
+  await env.DB.prepare("UPDATE courses SET status = 'UNPUBLISHED' WHERE id = ?").bind(courseId).run();
+  await auditLog(env, admin.adminId, 'UNPUBLISH', 'course', courseId, { title: course.title });
+  return successResponse({ unpublished: true });
+}
+
+// ─── Chapters (Admin) ─────────────────────────────
+
+async function handleAdminGetChapters(bookId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const chapters = await env.DB.prepare('SELECT * FROM chapters WHERE book_id = ? ORDER BY chapter_number ASC').bind(bookId).all();
+  return successResponse(chapters.results || []);
+}
+
+async function handleAdminCreateChapter(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.bookId || !body.title || body.chapterNumber === undefined) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'bookId, title, and chapterNumber are required' };
+  }
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO chapters (id, book_id, title, chapter_number, summary, content, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, body.bookId, body.title, body.chapterNumber, body.summary || null, body.content || null, body.status || 'DRAFT'
+  ).run();
+  
+  await auditLog(env, admin.adminId, 'CREATE', 'chapter', id, { title: body.title, bookId: body.bookId });
+  const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(id).first();
+  return successResponse(chapter);
+}
+
+async function handleAdminUpdateChapter(chapterId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const existing = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(chapterId).first();
+  if (!existing) throw { status: 404, code: 'NOT_FOUND', message: 'Chapter not found' };
+  
+  const fields = [];
+  const values = [];
+  const updateFields = { title: 'title', chapterNumber: 'chapter_number', summary: 'summary', content: 'content', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) {
+      fields.push(`${dbKey} = ?`);
+      values.push(body[jsKey]);
+    }
+  }
+  
+  if (fields.length > 0) {
+    values.push(chapterId);
+    await env.DB.prepare(`UPDATE chapters SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE', 'chapter', chapterId);
+  const updated = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(chapterId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteChapter(chapterId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run();
+  await auditLog(env, admin.adminId, 'DELETE', 'chapter', chapterId);
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Sections (Admin) ──────────────────────────
+
+async function handleAdminGetCourseSections(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const sections = await env.DB.prepare('SELECT * FROM course_sections WHERE course_id = ? ORDER BY display_order ASC').bind(courseId).all();
+  return successResponse(sections.results || []);
+}
+
+async function handleAdminCreateCourseSection(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_sections (id, course_id, title, description, display_order) VALUES (?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.title, body.description || null, body.displayOrder || 0
+  ).run();
+  
+  const section = await env.DB.prepare('SELECT * FROM course_sections WHERE id = ?').bind(id).first();
+  return successResponse(section);
+}
+
+async function handleAdminUpdateCourseSection(sectionId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
+  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
+  if (body.displayOrder !== undefined) { fields.push('display_order = ?'); values.push(body.displayOrder); }
+  
+  if (fields.length > 0) {
+    values.push(sectionId);
+    await env.DB.prepare(`UPDATE course_sections SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_sections WHERE id = ?').bind(sectionId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseSection(sectionId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_sections WHERE id = ?').bind(sectionId).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Lessons (Admin) ───────────────────────────
+
+async function handleAdminGetCourseLessons(sectionId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const lessons = await env.DB.prepare('SELECT * FROM course_lessons WHERE section_id = ? ORDER BY display_order ASC').bind(sectionId).all();
+  return successResponse(lessons.results || []);
+}
+
+async function handleAdminCreateCourseLesson(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.sectionId || !body.courseId || !body.title || !body.lessonType) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'Missing required lesson fields' };
+  }
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_lessons (id, section_id, course_id, title, lesson_type, content, summary, is_free_preview, duration_minutes, display_order, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.sectionId, body.courseId, body.title, body.lessonType, body.content || null, body.summary || null, body.isFreePreview ? 1 : 0, body.durationMinutes || 0, body.displayOrder || 0, body.status || 'DRAFT'
+  ).run();
+  
+  const lesson = await env.DB.prepare('SELECT * FROM course_lessons WHERE id = ?').bind(id).first();
+  return successResponse(lesson);
+}
+
+async function handleAdminUpdateCourseLesson(lessonId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', lessonType: 'lesson_type', content: 'content', summary: 'summary', durationMinutes: 'duration_minutes', displayOrder: 'display_order', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  if (body.isFreePreview !== undefined) { fields.push('is_free_preview = ?'); values.push(body.isFreePreview ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(lessonId);
+    await env.DB.prepare(`UPDATE course_lessons SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_lessons WHERE id = ?').bind(lessonId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseLesson(lessonId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_lessons WHERE id = ?').bind(lessonId).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Assessments (Admin) ───────────────────────────
+
+async function handleAdminGetCourseAssessments(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM course_assessments WHERE course_id = ? ORDER BY created_at ASC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateCourseAssessment(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_assessments (id, course_id, section_id, title, description, assessment_type, time_limit_seconds, passing_score_percent, randomize, show_explanation, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.sectionId || null, body.title, body.description || null, body.assessmentType || 'QUIZ', body.timeLimitSeconds || null, body.passingScorePercent || 60, body.randomize ? 1 : 0, body.showExplanation ? 1 : 0, body.status || 'DRAFT'
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM course_assessments WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+async function handleAdminUpdateCourseAssessment(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', description: 'description', sectionId: 'section_id', assessmentType: 'assessment_type', timeLimitSeconds: 'time_limit_seconds', passingScorePercent: 'passing_score_percent', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  if (body.randomize !== undefined) { fields.push('randomize = ?'); values.push(body.randomize ? 1 : 0); }
+  if (body.showExplanation !== undefined) { fields.push('show_explanation = ?'); values.push(body.showExplanation ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE course_assessments SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_assessments WHERE id = ?').bind(id).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseAssessment(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_assessments WHERE id = ?').bind(id).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Assignments (Admin) ───────────────────────────
+
+async function handleAdminGetCourseAssignments(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM course_assignments WHERE course_id = ? ORDER BY created_at ASC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateCourseAssignment(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_assignments (id, course_id, section_id, title, description, due_date, max_attempts, passing_criteria, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.sectionId || null, body.title, body.description || null, body.dueDate || null, body.maxAttempts || 1, body.passingCriteria || null, body.status || 'DRAFT'
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM course_assignments WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+async function handleAdminUpdateCourseAssignment(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', description: 'description', sectionId: 'section_id', dueDate: 'due_date', maxAttempts: 'max_attempts', passingCriteria: 'passing_criteria', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE course_assignments SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_assignments WHERE id = ?').bind(id).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseAssignment(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_assignments WHERE id = ?').bind(id).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Projects (Admin) ───────────────────────────
+
+async function handleAdminGetCourseProjects(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM course_projects WHERE course_id = ? ORDER BY created_at ASC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateCourseProject(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_projects (id, course_id, title, objectives, submission_type, evaluation_criteria, status) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.title, body.objectives || null, body.submissionType || 'FILE', body.evaluationCriteria || null, body.status || 'DRAFT'
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM course_projects WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+async function handleAdminUpdateCourseProject(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', objectives: 'objectives', submissionType: 'submission_type', evaluationCriteria: 'evaluation_criteria', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE course_projects SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_projects WHERE id = ?').bind(id).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseProject(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_projects WHERE id = ?').bind(id).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Course Resources (Admin) ───────────────────────────
+
+async function handleAdminGetCourseResources(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM course_resources WHERE course_id = ? ORDER BY display_order ASC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateCourseResource(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.title || !body.url || !body.resourceType) throw { status: 400, code: 'VALIDATION_ERROR', message: 'Missing required resource fields' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO course_resources (id, course_id, section_id, lesson_id, title, resource_type, url, download_allowed, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.sectionId || null, body.lessonId || null, body.title, body.resourceType, body.url, body.downloadAllowed ? 1 : 0, body.displayOrder || 0
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM course_resources WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+async function handleAdminUpdateCourseResource(id, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', sectionId: 'section_id', lessonId: 'lesson_id', resourceType: 'resource_type', url: 'url', displayOrder: 'display_order' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  if (body.downloadAllowed !== undefined) { fields.push('download_allowed = ?'); values.push(body.downloadAllowed ? 1 : 0); }
+  
+  if (fields.length > 0) {
+    values.push(id);
+    await env.DB.prepare(`UPDATE course_resources SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  const updated = await env.DB.prepare('SELECT * FROM course_resources WHERE id = ?').bind(id).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteCourseResource(id, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_resources WHERE id = ?').bind(id).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Phase 5: Course Question Bank & Interactive Content ───
+
+// -- Course Questions --
+async function handleAdminGetCourseQuestions(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const result = await env.DB.prepare('SELECT * FROM course_questions WHERE course_id = ? ORDER BY created_at DESC').bind(courseId).all();
+  return { data: result.results || [] };
+}
+
+async function handleAdminCreateCourseQuestion(courseId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.questionText || !body.questionType || !body.correctAnswer) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'Missing required question fields' };
+  }
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO course_questions (id, course_id, assessment_id, question_text, question_type, options, correct_answer, explanation, points)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, courseId, body.assessmentId || null, body.questionText, body.questionType, 
+    body.options ? JSON.stringify(body.options) : null, 
+    body.correctAnswer, body.explanation || null, body.points || 1
+  ).run();
+  
+  return { success: true, id };
+}
+
+async function handleAdminUpdateCourseQuestion(courseId, questionId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare(`
+    UPDATE course_questions SET 
+      assessment_id = COALESCE(?, assessment_id),
+      question_text = COALESCE(?, question_text),
+      question_type = COALESCE(?, question_type),
+      options = COALESCE(?, options),
+      correct_answer = COALESCE(?, correct_answer),
+      explanation = COALESCE(?, explanation),
+      points = COALESCE(?, points)
+    WHERE id = ? AND course_id = ?
+  `).bind(
+    body.assessmentId !== undefined ? body.assessmentId : null,
+    body.questionText || null,
+    body.questionType || null,
+    body.options ? JSON.stringify(body.options) : null,
+    body.correctAnswer || null,
+    body.explanation || null,
+    body.points || null,
+    questionId, courseId
+  ).run();
+  return { success: true };
+}
+
+async function handleAdminDeleteCourseQuestion(courseId, questionId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM course_questions WHERE id = ? AND course_id = ?').bind(questionId, courseId).run();
+  return { success: true };
+}
+
+// -- Course Coding Lessons --
+async function handleAdminGetCodingLesson(lessonId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const result = await env.DB.prepare('SELECT * FROM course_coding_lessons WHERE lesson_id = ?').bind(lessonId).first();
+  return { data: result || null };
+}
+
+async function handleAdminSaveCodingLesson(courseId, lessonId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.language) throw { status: 400, code: 'VALIDATION_ERROR', message: 'Language is required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO course_coding_lessons (id, lesson_id, course_id, language, starter_code, test_cases, solution_code)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(lesson_id) DO UPDATE SET 
+      language=excluded.language, starter_code=excluded.starter_code, 
+      test_cases=excluded.test_cases, solution_code=excluded.solution_code
+  `).bind(
+    id, lessonId, courseId, body.language, body.starterCode || null, 
+    body.testCases ? JSON.stringify(body.testCases) : null, body.solutionCode || null
+  ).run();
+  
+  return { success: true };
+}
+
+// -- Course Live Sessions --
+async function handleAdminGetLiveSession(lessonId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const result = await env.DB.prepare('SELECT * FROM course_live_sessions WHERE lesson_id = ?').bind(lessonId).first();
+  return { data: result || null };
+}
+
+async function handleAdminSaveLiveSession(courseId, lessonId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.meetingUrl || !body.startTime) throw { status: 400, code: 'VALIDATION_ERROR', message: 'Meeting URL and start time required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO course_live_sessions (id, lesson_id, course_id, meeting_url, start_time, duration_minutes, host_info)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(lesson_id) DO UPDATE SET 
+      meeting_url=excluded.meeting_url, start_time=excluded.start_time, 
+      duration_minutes=excluded.duration_minutes, host_info=excluded.host_info
+  `).bind(
+    id, lessonId, courseId, body.meetingUrl, body.startTime, 
+    body.durationMinutes || 60, body.hostInfo || null
+  ).run();
+  
+  return { success: true };
+}
+
+
+// ─── Questions (Admin) ────────────────────────────
+
+async function handleAdminGetQuestions(bookId, params, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  
+  let query = 'SELECT * FROM questions WHERE book_id = ?';
+  const binds = [bookId];
+  
+  if (params.chapterId) {
+    query += ' AND chapter_id = ?';
+    binds.push(params.chapterId);
+  }
+  
+  query += ' ORDER BY display_order ASC';
+  
+  const questions = await env.DB.prepare(query).bind(...binds).all();
+  return successResponse(questions.results || []);
+}
+
+async function handleAdminCreateQuestion(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.bookId || !body.questionText || !body.questionType || !body.answer) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'Missing required question fields' };
+  }
+  
+  const id = generateId();
+  await env.DB.prepare(`
+    INSERT INTO questions (id, book_id, chapter_id, question_text, question_type, difficulty, answer, explanation, marks, status, display_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM',
+    body.answer, body.explanation || null, body.marks || 1, body.status || 'DRAFT', body.displayOrder || 0
+  ).run();
+  
+  const question = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(id).first();
+  return successResponse(question);
+}
+
+async function handleAdminUpdateQuestion(questionId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = {
+    chapterId: 'chapter_id', questionText: 'question_text', questionType: 'question_type',
+    difficulty: 'difficulty', answer: 'answer', explanation: 'explanation',
+    marks: 'marks', status: 'status', displayOrder: 'display_order'
+  };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey] === '' ? null : body[jsKey]); }
+  }
+  
+  if (fields.length > 0) {
+    values.push(questionId);
+    await env.DB.prepare(`UPDATE questions SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  const updated = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(questionId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteQuestion(questionId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM questions WHERE id = ?').bind(questionId).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Quizzes (Admin) ──────────────────────────────
+
+async function handleAdminGetQuizzes(bookId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const quizzes = await env.DB.prepare('SELECT * FROM quizzes WHERE book_id = ? ORDER BY created_at DESC').bind(bookId).all();
+  return successResponse(quizzes.results || []);
+}
+
+async function handleAdminCreateQuiz(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.bookId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'bookId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO quizzes (id, title, description, book_id, chapter_id, time_limit_seconds, passing_score_percent, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    id, body.title, body.description || null, body.bookId, body.chapterId || null, body.timeLimitSeconds || null, body.passingScorePercent || 60, body.status || 'DRAFT'
+  ).run();
+  
+  const quiz = await env.DB.prepare('SELECT * FROM quizzes WHERE id = ?').bind(id).first();
+  return successResponse(quiz);
+}
+
+async function handleAdminUpdateQuiz(quizId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', description: 'description', chapterId: 'chapter_id', timeLimitSeconds: 'time_limit_seconds', passingScorePercent: 'passing_score_percent', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  
+  if (fields.length > 0) {
+    values.push(quizId);
+    await env.DB.prepare(`UPDATE quizzes SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  const updated = await env.DB.prepare('SELECT * FROM quizzes WHERE id = ?').bind(quizId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteQuiz(quizId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(quizId).run();
+  return successResponse({ deleted: true });
+}
+
+// ─── Flashcard Sets (Admin) ────────────────────────
+
+async function handleAdminGetFlashcards(bookId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const sets = await env.DB.prepare('SELECT * FROM flashcard_sets WHERE book_id = ? ORDER BY created_at DESC').bind(bookId).all();
+  return successResponse(sets.results || []);
+}
+
+async function handleAdminCreateFlashcardSet(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.bookId || !body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'bookId and title are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO flashcard_sets (id, title, description, book_id, chapter_id, status) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+    id, body.title, body.description || null, body.bookId, body.chapterId || null, body.status || 'DRAFT'
+  ).run();
+  
+  const set = await env.DB.prepare('SELECT * FROM flashcard_sets WHERE id = ?').bind(id).first();
+  return successResponse(set);
+}
+
+async function handleAdminUpdateFlashcardSet(setId, body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const fields = []; const values = [];
+  const updateFields = { title: 'title', description: 'description', chapterId: 'chapter_id', status: 'status' };
+  
+  for (const [jsKey, dbKey] of Object.entries(updateFields)) {
+    if (body[jsKey] !== undefined) { fields.push(`${dbKey} = ?`); values.push(body[jsKey]); }
+  }
+  
+  if (fields.length > 0) {
+    values.push(setId);
+    await env.DB.prepare(`UPDATE flashcard_sets SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
+  }
+  
+  const updated = await env.DB.prepare('SELECT * FROM flashcard_sets WHERE id = ?').bind(setId).first();
+  return successResponse(updated);
+}
+
+async function handleAdminDeleteFlashcardSet(setId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  await env.DB.prepare('DELETE FROM flashcard_sets WHERE id = ?').bind(setId).run();
+  return successResponse({ deleted: true });
+}
+
 // ═══════════════════════════════════════════════════
 // Admin API Handlers
 // ═══════════════════════════════════════════════════
@@ -644,310 +1403,6 @@ async function handleAdminUnpublishBook(bookId, admin, env, emergency = false) {
 }
 
 // ─── Admin Chapters ──────────────────────────────
-
-async function handleAdminGetChapters(bookId, admin, env) {
-  const chapters = await env.DB.prepare(
-    "SELECT * FROM chapters WHERE book_id = ? ORDER BY chapter_number"
-  ).bind(bookId).all();
-  
-  const results = chapters.results || [];
-  for (const ch of results) {
-    const qc = await env.DB.prepare("SELECT COUNT(*) as c FROM questions WHERE chapter_id = ?").bind(ch.id).first();
-    ch.questionsCount = qc.c;
-  }
-  
-  return successResponse(results);
-}
-
-async function handleAdminCreateChapter(body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  if (!body.bookId || !body.title || body.chapterNumber === undefined) {
-    throw { status: 400, code: 'VALIDATION_ERROR', message: 'bookId, title, and chapterNumber required' };
-  }
-  
-  const id = generateId();
-  await env.DB.prepare(`
-    INSERT INTO chapters (id, book_id, title, chapter_number, summary, content, word_count, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.bookId, body.title, body.chapterNumber, body.summary || null, body.content || null, body.wordCount || 0, body.status || 'PUBLISHED').run();
-  
-  await auditLog(env, admin.adminId, 'CREATE', 'chapter', id);
-  const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(id).first();
-  return successResponse(chapter);
-}
-
-async function handleAdminUpdateChapter(chapterId, body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  const fields = [];
-  const values = [];
-  
-  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
-  if (body.chapterNumber !== undefined) { fields.push('chapter_number = ?'); values.push(body.chapterNumber); }
-  if (body.summary !== undefined) { fields.push('summary = ?'); values.push(body.summary); }
-  if (body.content !== undefined) { fields.push('content = ?'); values.push(body.content); }
-  if (body.wordCount !== undefined) { fields.push('word_count = ?'); values.push(body.wordCount); }
-  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
-  
-  if (fields.length > 0) {
-    values.push(chapterId);
-    await env.DB.prepare(`UPDATE chapters SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-  }
-  
-  await auditLog(env, admin.adminId, 'UPDATE', 'chapter', chapterId);
-  const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(chapterId).first();
-  return successResponse(chapter);
-}
-
-async function handleAdminDeleteChapter(chapterId, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run();
-  await auditLog(env, admin.adminId, 'DELETE', 'chapter', chapterId);
-  return successResponse({ deleted: true });
-}
-
-// ─── Admin Questions ─────────────────────────────
-
-async function handleAdminGetQuestions(bookId, params, admin, env) {
-  const page = parseInt(params.page) || 1;
-  const limit = Math.min(parseInt(params.limit) || 20, 50);
-  const offset = (page - 1) * limit;
-  
-  let where = "book_id = ?";
-  const binds = [bookId];
-  
-  if (params.chapterId) { where += ' AND chapter_id = ?'; binds.push(params.chapterId); }
-  if (params.type) { where += ' AND question_type = ?'; binds.push(params.type); }
-  if (params.difficulty) { where += ' AND difficulty = ?'; binds.push(params.difficulty); }
-  if (params.status) { where += ' AND status = ?'; binds.push(params.status); }
-  
-  const total = (await env.DB.prepare(`SELECT COUNT(*) as c FROM questions WHERE ${where}`).bind(...binds).first()).c;
-  const questions = await env.DB.prepare(`SELECT * FROM questions WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
-  
-  // Fetch options for MCQ questions and parse metadata
-  for (const q of (questions.results || [])) {
-    if (q.metadata) {
-      try { q.metadata = JSON.parse(q.metadata); } catch(e) {}
-    } else {
-      q.metadata = {};
-    }
-    
-    if (q.question_type === 'MCQ' || q.question_type === 'MULTIPLE_SELECT' || q.question_type === 'IMAGE_BASED') {
-      const opts = await env.DB.prepare('SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order').bind(q.id).all();
-      q.options = opts.results || [];
-    }
-  }
-  
-  return successResponse(questions.results || [], { page, limit, total, hasMore: offset + limit < total });
-}
-
-async function handleAdminCreateQuestion(body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  if (!body.bookId || !body.questionText || !body.questionType || !body.answer) {
-    throw { status: 400, code: 'VALIDATION_ERROR', message: 'bookId, questionText, questionType, and answer required' };
-  }
-  
-  const id = generateId();
-  const metadataString = body.metadata ? JSON.stringify(body.metadata) : null;
-  
-  await env.DB.prepare(`
-    INSERT INTO questions (id, book_id, chapter_id, question_text, question_type, difficulty, answer, explanation, metadata, marks, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.bookId, body.chapterId || null, body.questionText, body.questionType, body.difficulty || 'MEDIUM', body.answer, body.explanation || null, metadataString, body.marks || 1, body.status || 'PUBLISHED', admin.adminId).run();
-  
-  // Add options for types that support options
-  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT' || body.questionType === 'IMAGE_BASED') && body.options?.length) {
-    for (let i = 0; i < body.options.length; i++) {
-      const optId = generateId();
-      await env.DB.prepare('INSERT INTO question_options (id, question_id, option_text, option_order, is_correct) VALUES (?, ?, ?, ?, ?)').bind(optId, id, body.options[i].text, i, body.options[i].isCorrect ? 1 : 0).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'CREATE', 'question', id);
-  return successResponse({ id });
-}
-
-async function handleAdminUpdateQuestion(questionId, body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  const fields = [];
-  const values = [];
-  
-  if (body.questionText !== undefined) { fields.push('question_text = ?'); values.push(body.questionText); }
-  if (body.questionType !== undefined) { fields.push('question_type = ?'); values.push(body.questionType); }
-  if (body.difficulty !== undefined) { fields.push('difficulty = ?'); values.push(body.difficulty); }
-  if (body.answer !== undefined) { fields.push('answer = ?'); values.push(body.answer); }
-  if (body.explanation !== undefined) { fields.push('explanation = ?'); values.push(body.explanation); }
-  if (body.marks !== undefined) { fields.push('marks = ?'); values.push(body.marks); }
-  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
-  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
-  if (body.metadata !== undefined) { fields.push('metadata = ?'); values.push(body.metadata ? JSON.stringify(body.metadata) : null); }
-  
-  if (fields.length > 0) {
-    values.push(questionId);
-    await env.DB.prepare(`UPDATE questions SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-  }
-  
-  // Update options if present and applicable
-  if ((body.questionType === 'MCQ' || body.questionType === 'MULTIPLE_SELECT' || body.questionType === 'IMAGE_BASED') && body.options !== undefined) {
-    await env.DB.prepare('DELETE FROM question_options WHERE question_id = ?').bind(questionId).run();
-    for (let i = 0; i < body.options.length; i++) {
-      const optId = generateId();
-      await env.DB.prepare('INSERT INTO question_options (id, question_id, option_text, option_order, is_correct) VALUES (?, ?, ?, ?, ?)').bind(optId, questionId, body.options[i].text, i, body.options[i].isCorrect ? 1 : 0).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'UPDATE', 'question', questionId);
-  return successResponse({ updated: true });
-}
-
-async function handleAdminDeleteQuestion(questionId, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  const question = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(questionId).first();
-  if (!question) throw { status: 404, code: 'NOT_FOUND', message: 'Question not found' };
-  
-  await env.DB.prepare('DELETE FROM questions WHERE id = ?').bind(questionId).run();
-  await auditLog(env, admin.adminId, 'DELETE', 'question', questionId);
-  return successResponse({ deleted: true });
-}
-
-// ─── Admin Quizzes ───────────────────────────────
-
-async function handleAdminGetQuizzes(bookId, admin, env) {
-  const quizzes = await env.DB.prepare("SELECT * FROM quizzes WHERE book_id = ?").bind(bookId).all();
-  
-  for (const quiz of (quizzes.results || [])) {
-    const questions = await env.DB.prepare('SELECT question_id FROM quiz_questions WHERE quiz_id = ? ORDER BY question_order').bind(quiz.id).all();
-    quiz.questionIds = questions.results.map(q => q.question_id);
-    quiz.questionCount = quiz.questionIds.length;
-  }
-  
-  return successResponse(quizzes.results || []);
-}
-
-async function handleAdminCreateQuiz(body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  if (!body.title) {
-    throw { status: 400, code: 'VALIDATION_ERROR', message: 'title required' };
-  }
-  
-  const id = generateId();
-  await env.DB.prepare(`
-    INSERT INTO quizzes (id, title, description, book_id, chapter_id, subject_id, time_limit_seconds, randomize, show_explanation, passing_score_percent, difficulty, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.subjectId || null, body.timeLimitSeconds || null, body.randomize !== false ? 1 : 0, body.showExplanation !== false ? 1 : 0, body.passingScorePercent || 60, body.difficulty || 'MIXED', body.status || 'PUBLISHED', admin.adminId).run();
-  
-  if (Array.isArray(body.questionIds) && body.questionIds.length > 0) {
-    for (let i = 0; i < body.questionIds.length; i++) {
-      await env.DB.prepare('INSERT INTO quiz_questions (quiz_id, question_id, question_order) VALUES (?, ?, ?)').bind(id, body.questionIds[i], i).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'CREATE', 'quiz', id);
-  return successResponse({ id });
-}
-
-async function handleAdminUpdateQuiz(quizId, body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  const fields = [];
-  const values = [];
-  
-  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
-  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
-  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
-  if (body.timeLimitSeconds !== undefined) { fields.push('time_limit_seconds = ?'); values.push(body.timeLimitSeconds); }
-  if (body.randomize !== undefined) { fields.push('randomize = ?'); values.push(body.randomize ? 1 : 0); }
-  if (body.showExplanation !== undefined) { fields.push('show_explanation = ?'); values.push(body.showExplanation ? 1 : 0); }
-  if (body.passingScorePercent !== undefined) { fields.push('passing_score_percent = ?'); values.push(body.passingScorePercent); }
-  if (body.difficulty !== undefined) { fields.push('difficulty = ?'); values.push(body.difficulty); }
-  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
-  
-  if (fields.length > 0) {
-    values.push(quizId);
-    await env.DB.prepare(`UPDATE quizzes SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-  }
-  
-  if (body.questionIds !== undefined) {
-    await env.DB.prepare('DELETE FROM quiz_questions WHERE quiz_id = ?').bind(quizId).run();
-    for (let i = 0; i < body.questionIds.length; i++) {
-      await env.DB.prepare('INSERT INTO quiz_questions (quiz_id, question_id, question_order) VALUES (?, ?, ?)').bind(quizId, body.questionIds[i], i).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'UPDATE', 'quiz', quizId);
-  return successResponse({ updated: true });
-}
-
-async function handleAdminDeleteQuiz(quizId, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  await env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(quizId).run();
-  await auditLog(env, admin.adminId, 'DELETE', 'quiz', quizId);
-  return successResponse({ deleted: true });
-}
-
-// ─── Admin Flashcards ────────────────────────────
-
-async function handleAdminGetFlashcards(bookId, admin, env) {
-  const sets = await env.DB.prepare("SELECT * FROM flashcard_sets WHERE book_id = ?").bind(bookId).all();
-  return successResponse(sets.results || []);
-}
-
-async function handleAdminCreateFlashcardSet(body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  if (!body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'title required' };
-  
-  const id = generateId();
-  await env.DB.prepare(`
-    INSERT INTO flashcard_sets (id, title, description, book_id, chapter_id, card_count, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, body.title, body.description || null, body.bookId || null, body.chapterId || null, body.cards?.length || 0, body.status || 'PUBLISHED', admin.adminId).run();
-  
-  if (body.cards?.length) {
-    for (let i = 0; i < body.cards.length; i++) {
-      const cardId = generateId();
-      await env.DB.prepare('INSERT INTO flashcards (id, set_id, front_text, back_text, display_order) VALUES (?, ?, ?, ?, ?)').bind(cardId, id, body.cards[i].front, body.cards[i].back, i).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'CREATE', 'flashcard_set', id);
-  return successResponse({ id });
-}
-
-async function handleAdminUpdateFlashcardSet(setId, body, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  const fields = [];
-  const values = [];
-  
-  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title); }
-  if (body.description !== undefined) { fields.push('description = ?'); values.push(body.description); }
-  if (body.chapterId !== undefined) { fields.push('chapter_id = ?'); values.push(body.chapterId); }
-  if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
-  if (body.cards !== undefined) { fields.push('card_count = ?'); values.push(body.cards.length); }
-  
-  if (fields.length > 0) {
-    values.push(setId);
-    await env.DB.prepare(`UPDATE flashcard_sets SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run();
-  }
-  
-  if (body.cards !== undefined) {
-    await env.DB.prepare('DELETE FROM flashcards WHERE set_id = ?').bind(setId).run();
-    for (let i = 0; i < body.cards.length; i++) {
-      const cardId = generateId();
-      await env.DB.prepare('INSERT INTO flashcards (id, set_id, front_text, back_text, display_order) VALUES (?, ?, ?, ?, ?)').bind(cardId, setId, body.cards[i].front, body.cards[i].back, i).run();
-    }
-  }
-  
-  await auditLog(env, admin.adminId, 'UPDATE', 'flashcard_set', setId);
-  return successResponse({ updated: true });
-}
-
-async function handleAdminDeleteFlashcardSet(setId, admin, env) {
-  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
-  await env.DB.prepare('DELETE FROM flashcard_sets WHERE id = ?').bind(setId).run();
-  await auditLog(env, admin.adminId, 'DELETE', 'flashcard_set', setId);
-  return successResponse({ deleted: true });
-}
-
-// ─── Admin Categories/Subjects ───────────────────
-
 async function handleAdminCreateCategory(body, admin, env) {
   requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
   if (!body.name) throw { status: 400, code: 'VALIDATION_ERROR', message: 'name required' };
@@ -1242,6 +1697,39 @@ async function handleAdminCreateNotification(body, admin, env) {
   return successResponse({ id });
 }
 
+// ─── Admin Config ────────────────────────────────
+
+async function handleAdminGetConfig(env) {
+  const configs = await env.DB.prepare('SELECT * FROM app_config').all();
+  return successResponse(configs.results || []);
+}
+
+async function handleAdminUpdateConfig(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  
+  if (!Array.isArray(body.configs)) {
+    throw { status: 400, code: 'VALIDATION_ERROR', message: 'Body must contain configs array' };
+  }
+
+  for (const item of body.configs) {
+    if (!item.key || item.value === undefined) continue;
+    
+    const existing = await env.DB.prepare('SELECT key FROM app_config WHERE key = ?').bind(item.key).first();
+    const strValue = typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value);
+    
+    if (existing) {
+      await env.DB.prepare('UPDATE app_config SET value = ?, updated_by = ?, updated_at = datetime("now") WHERE key = ?')
+        .bind(strValue, admin.adminId, item.key).run();
+    } else {
+      await env.DB.prepare('INSERT INTO app_config (key, value, description, updated_by) VALUES (?, ?, ?, ?)')
+        .bind(item.key, strValue, item.description || '', admin.adminId).run();
+    }
+  }
+  
+  await auditLog(env, admin.adminId, 'UPDATE_CONFIG', 'app_config', 'bulk');
+  return successResponse({ updated: true });
+}
+
 // ─── Admin All Books (with all statuses) ─────────
 
 async function handleAdminGetBooks(params, admin, env) {
@@ -1264,6 +1752,132 @@ async function handleAdminGetBooks(params, admin, env) {
 // ═══════════════════════════════════════════════════
 // Main Router
 // ═══════════════════════════════════════════════════
+
+
+// ─── Phase 6 Handlers (Learner Experience) ─────────────────────────
+
+async function sendBrevoEmail(toEmail, toName, subject, htmlContent, env) {
+  const BREVO_API_KEY = env.BREVO_API_KEY || 'MISSING_API_KEY';
+  const url = 'https://api.brevo.com/v3/smtp/email';
+  
+  const payload = {
+    sender: { name: 'TF Study Shelf', email: 'no-reply@techilyfly.com' },
+    to: [{ email: toEmail, name: toName || toEmail }],
+    subject: subject,
+    htmlContent: htmlContent
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': BREVO_API_KEY
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      console.error('Brevo error:', await response.text());
+    }
+  } catch (error) {
+    console.error('Brevo fetch error:', error);
+  }
+}
+
+// Enrollments
+async function handleAdminGetEnrollments(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM enrollments WHERE course_id = ? ORDER BY enrolled_at DESC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateEnrollment(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.userId) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and userId are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO enrollments (id, user_id, course_id, status) VALUES (?, ?, ?, ?)`).bind(
+    id, body.userId, body.courseId, body.status || 'ACTIVE'
+  ).run();
+  
+  const course = await env.DB.prepare('SELECT title FROM courses WHERE id = ?').bind(body.courseId).first();
+  const userEmail = body.userEmail || body.userId;
+  
+  if (userEmail && userEmail.includes('@')) {
+    await sendBrevoEmail(userEmail, userEmail, `You've been enrolled in ${course?.title || 'a new course'}`, `<p>Hello!</p><p>You have been successfully enrolled in the course: <strong>${course?.title || 'the course'}</strong>.</p><p>Happy learning!</p>`, env);
+  }
+  
+  const item = await env.DB.prepare('SELECT * FROM enrollments WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+// Certificates
+async function handleAdminGetCertificates(courseId, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM certificates WHERE course_id = ? ORDER BY issued_at DESC').bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminIssueCertificate(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.courseId || !body.userId) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and userId are required' };
+  
+  const id = generateId();
+  const certNumber = 'CERT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  
+  await env.DB.prepare(`INSERT INTO certificates (id, course_id, user_id, certificate_number, verification_url, status) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+    id, body.courseId, body.userId, certNumber, body.verificationUrl || '', 'ISSUED'
+  ).run();
+  
+  const course = await env.DB.prepare('SELECT title FROM courses WHERE id = ?').bind(body.courseId).first();
+  const userEmail = body.userEmail || body.userId;
+  
+  if (userEmail && userEmail.includes('@')) {
+    await sendBrevoEmail(userEmail, userEmail, `Certificate of Completion for ${course?.title || 'the course'}`, `<p>Congratulations!</p><p>You have successfully completed <strong>${course?.title || 'the course'}</strong>.</p><p>Your certificate number is: ${certNumber}</p>`, env);
+  }
+  
+  const item = await env.DB.prepare('SELECT * FROM certificates WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+// Discussions
+async function handleGetDiscussions(courseId, params, env) {
+  const items = await env.DB.prepare("SELECT * FROM discussions WHERE course_id = ? AND status != 'DELETED' ORDER BY is_pinned DESC, created_at DESC").bind(courseId).all();
+  return successResponse(items.results || []);
+}
+
+async function handleCreateDiscussion(courseId, body, user, env) {
+  if (!body.title || !body.content) throw { status: 400, code: 'VALIDATION_ERROR', message: 'title and content are required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO discussions (id, course_id, lesson_id, user_id, title, content) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+    id, courseId, body.lessonId || null, user.uid, body.title, body.content
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM discussions WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
+
+// Learning Paths
+async function handleAdminGetLearningPaths(admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  const items = await env.DB.prepare('SELECT * FROM learning_paths ORDER BY created_at DESC').bind().all();
+  return successResponse(items.results || []);
+}
+
+async function handleAdminCreateLearningPath(body, admin, env) {
+  requireRole(admin, 'SUPER_ADMIN', 'CONTENT_MANAGER');
+  if (!body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'title is required' };
+  
+  const id = generateId();
+  await env.DB.prepare(`INSERT INTO learning_paths (id, title, description, status) VALUES (?, ?, ?, ?)`).bind(
+    id, body.title, body.description || null, body.status || 'DRAFT'
+  ).run();
+  
+  const item = await env.DB.prepare('SELECT * FROM learning_paths WHERE id = ?').bind(id).first();
+  return successResponse(item);
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -1312,6 +1926,12 @@ export default {
       else if (method === 'GET' && path === '/api/v1/languages') {
         response = await handleGetLanguages(env);
       }
+      else if (method === 'GET' && path === '/api/v1/courses') {
+        response = await handleGetCourses(params, env);
+      }
+      else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/courses/:id'))) {
+        response = await handleGetCourse(routeParams.id, env);
+      }
       else if (method === 'GET' && path === '/api/v1/study-packs') {
         response = await handleGetStudyPacks(env);
       }
@@ -1359,6 +1979,129 @@ export default {
         }
         else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/emergency-unpublish'))) {
           response = await handleAdminUnpublishBook(routeParams.id, admin, env, true);
+        }
+        // Admin Courses
+        else if (method === 'GET' && path === '/api/v1/admin/courses') {
+          response = await handleAdminGetCourses(params, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/courses') {
+          response = await handleAdminCreateCourse(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id'))) {
+          response = await handleAdminUpdateCourse(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id'))) {
+          response = await handleAdminDeleteCourse(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/publish'))) {
+          response = await handleAdminPublishCourse(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/unpublish'))) {
+          response = await handleAdminUnpublishCourse(routeParams.id, admin, env);
+        }
+        // Admin Course Sections
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/sections'))) {
+          response = await handleAdminGetCourseSections(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-sections') {
+          response = await handleAdminCreateCourseSection(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-sections/:id'))) {
+          response = await handleAdminUpdateCourseSection(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-sections/:id'))) {
+          response = await handleAdminDeleteCourseSection(routeParams.id, admin, env);
+        }
+        // Admin Course Lessons
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/course-sections/:id/lessons'))) {
+          response = await handleAdminGetCourseLessons(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-lessons') {
+          response = await handleAdminCreateCourseLesson(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-lessons/:id'))) {
+          response = await handleAdminUpdateCourseLesson(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-lessons/:id'))) {
+          response = await handleAdminDeleteCourseLesson(routeParams.id, admin, env);
+        }
+        // Admin Course Assessments
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/assessments'))) {
+          response = await handleAdminGetCourseAssessments(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-assessments') {
+          response = await handleAdminCreateCourseAssessment(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-assessments/:id'))) {
+          response = await handleAdminUpdateCourseAssessment(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-assessments/:id'))) {
+          response = await handleAdminDeleteCourseAssessment(routeParams.id, admin, env);
+        }
+        // Admin Course Assignments
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/assignments'))) {
+          response = await handleAdminGetCourseAssignments(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-assignments') {
+          response = await handleAdminCreateCourseAssignment(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-assignments/:id'))) {
+          response = await handleAdminUpdateCourseAssignment(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-assignments/:id'))) {
+          response = await handleAdminDeleteCourseAssignment(routeParams.id, admin, env);
+        }
+        // Admin Course Projects
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/projects'))) {
+          response = await handleAdminGetCourseProjects(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-projects') {
+          response = await handleAdminCreateCourseProject(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-projects/:id'))) {
+          response = await handleAdminUpdateCourseProject(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-projects/:id'))) {
+          response = await handleAdminDeleteCourseProject(routeParams.id, admin, env);
+        }
+        // Admin Course Resources
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/resources'))) {
+          response = await handleAdminGetCourseResources(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/course-resources') {
+          response = await handleAdminCreateCourseResource(body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/course-resources/:id'))) {
+          response = await handleAdminUpdateCourseResource(routeParams.id, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/course-resources/:id'))) {
+          response = await handleAdminDeleteCourseResource(routeParams.id, admin, env);
+        }
+        // Admin Course Questions (Phase 5)
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/questions'))) {
+          response = await handleAdminGetCourseQuestions(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/questions'))) {
+          response = await handleAdminCreateCourseQuestion(routeParams.id, body, admin, env);
+        }
+        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:courseId/questions/:questionId'))) {
+          response = await handleAdminUpdateCourseQuestion(routeParams.courseId, routeParams.questionId, body, admin, env);
+        }
+        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:courseId/questions/:questionId'))) {
+          response = await handleAdminDeleteCourseQuestion(routeParams.courseId, routeParams.questionId, admin, env);
+        }
+        // Admin Course Interactive Content (Phase 5)
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/course-lessons/:id/coding'))) {
+          response = await handleAdminGetCodingLesson(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:courseId/lessons/:lessonId/coding'))) {
+          response = await handleAdminSaveCodingLesson(routeParams.courseId, routeParams.lessonId, body, admin, env);
+        }
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/course-lessons/:id/live'))) {
+          response = await handleAdminGetLiveSession(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:courseId/lessons/:lessonId/live'))) {
+          response = await handleAdminSaveLiveSession(routeParams.courseId, routeParams.lessonId, body, admin, env);
         }
         // Admin Chapters
         else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/books/:id/chapters'))) {
@@ -1432,22 +2175,6 @@ export default {
           response = await handleAdminCreateSubject(body, admin, env);
         }
         else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/subjects/:id'))) {
-          response = await handleAdminUpdateSubject(routeParams.id, body, admin, env);
-        }
-        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/subjects/:id'))) {
-          response = await handleAdminDeleteSubject(routeParams.id, admin, env);
-        }
-        // Admin Languages
-        else if (method === 'GET' && path === '/api/v1/admin/languages') {
-          response = await handleAdminGetLanguages(env);
-        }
-        else if (method === 'POST' && path === '/api/v1/admin/languages') {
-          response = await handleAdminCreateLanguage(body, admin, env);
-        }
-        else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/languages/:id'))) {
-          response = await handleAdminUpdateLanguage(routeParams.id, body, admin, env);
-        }
-        else if (method === 'DELETE' && (routeParams = matchRoute(path, '/api/v1/admin/languages/:id'))) {
           response = await handleAdminDeleteLanguage(routeParams.id, admin, env);
         }
         // Admin Users
@@ -1472,6 +2199,26 @@ export default {
         }
         else if (method === 'PUT' && (routeParams = matchRoute(path, '/api/v1/admin/ads/:id'))) {
           response = await handleAdminUpdateAd(routeParams.id, body, admin, env);
+        }
+
+        // Admin Phase 6 (Enrollments, Certificates, Learning Paths)
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/enrollments'))) {
+          response = await handleAdminGetEnrollments(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/enrollments') {
+          response = await handleAdminCreateEnrollment(body, admin, env);
+        }
+        else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/certificates'))) {
+          response = await handleAdminGetCertificates(routeParams.id, admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/certificates') {
+          response = await handleAdminIssueCertificate(body, admin, env);
+        }
+        else if (method === 'GET' && path === '/api/v1/admin/learning-paths') {
+          response = await handleAdminGetLearningPaths(admin, env);
+        }
+        else if (method === 'POST' && path === '/api/v1/admin/learning-paths') {
+          response = await handleAdminCreateLearningPath(body, admin, env);
         }
         // Admin Analytics
         else if (method === 'GET' && path === '/api/v1/admin/analytics/overview') {

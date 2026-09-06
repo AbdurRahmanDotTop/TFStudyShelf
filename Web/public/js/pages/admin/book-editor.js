@@ -3,8 +3,23 @@
  */
 window.AdminBookEditor = (() => {
   let editingBookId = null;
+  let currentTab = 'basic';
   let categories = [];
   let subjects = [];
+
+  const tabs = [
+    { id: 'basic', icon: 'info', label: 'Basic Info' },
+    { id: 'organization', icon: 'category', label: 'Organization' },
+    { id: 'rights', icon: 'gavel', label: 'Rights & Access' },
+    { id: 'chapters', icon: 'format_list_numbered', label: 'Chapters' },
+    { id: 'qna', icon: 'help_outline', label: 'Q&A' },
+    { id: 'quizzes', icon: 'quiz', label: 'Quizzes' },
+    { id: 'flashcards', icon: 'style', label: 'Flashcards' },
+    { id: 'resources', icon: 'folder', label: 'Resources' },
+    { id: 'media', icon: 'play_circle', label: 'Media' },
+    { id: 'preview', icon: 'preview', label: 'Preview' },
+    { id: 'settings', icon: 'settings', label: 'Settings' }
+  ];
 
   async function render(container, params = {}) {
     editingBookId = params.id || null;
@@ -14,160 +29,236 @@ window.AdminBookEditor = (() => {
       <div class="admin-page-header">
         <div>
           <h1 class="admin-page-header__title">${isEdit ? 'Edit Book' : 'Add New Book'}</h1>
-          <p class="admin-page-header__subtitle">${isEdit ? 'Update book information and settings' : 'Fill in the book details to add it to your catalog'}</p>
+          <p class="admin-page-header__subtitle">Manage the book workspace and all its contextual content</p>
         </div>
         <div class="admin-page-header__actions">
           <button class="btn btn-ghost" onclick="AdminApp.navigate('books')">Cancel</button>
-          <button class="btn btn-secondary" id="save-draft-btn" onclick="AdminBookEditor.save('DRAFT')">Save as Draft</button>
+          <button class="btn btn-secondary" id="save-draft-btn" onclick="AdminBookEditor.save('DRAFT')">Save Draft</button>
           <button class="btn btn-primary" id="save-publish-btn" onclick="AdminBookEditor.save('PUBLISHED')">
-            <span class="material-symbols-outlined" style="font-size:18px">publish</span> Save & Publish
+            <span class="material-symbols-outlined" style="font-size:18px">publish</span> Publish
           </button>
         </div>
       </div>
 
-      <div class="editor-form" id="book-editor-form">
-        <!-- Basic Info -->
-        <div class="editor-form__section">
-          <h3 class="editor-form__section-title">📘 Basic Information</h3>
-          <div class="editor-form__row">
-            <div class="form-group">
-              <label class="form-label" for="book-title">Title *</label>
-              <input type="text" id="book-title" class="form-input" placeholder="Enter book title" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-author">Author *</label>
-              <input type="text" id="book-author" class="form-input" placeholder="Author name">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-emoji">Emoji Icon</label>
-              <input type="text" id="book-emoji" class="form-input" placeholder="📘">
-            </div>
-            <div class="form-group flex items-center mt-md">
-              <label class="checkbox-label mt-sm">
-                <input type="checkbox" id="book-is-featured"> Featured Book
-              </label>
-            </div>
-          </div>
-          <div class="form-group mt-md">
-            <label class="form-label" for="book-description">Description *</label>
-            <textarea id="book-description" class="form-input" placeholder="Write a compelling description…" rows="4"></textarea>
-          </div>
-          <div class="form-group mt-md">
-            <label class="form-label" for="book-cover-url">Cover Image URL *</label>
-            <input type="url" id="book-cover-url" class="form-input" placeholder="https://..." required>
-          </div>
-          <div class="editor-form__row mt-md">
-            <div class="form-group">
-              <label class="form-label" for="book-language">Language *</label>
-              <select id="book-language" class="form-input">
-                <option value="">Loading languages...</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-pages">Page Count</label>
-              <input type="number" id="book-pages" class="form-input" placeholder="0" min="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-difficulty">Difficulty</label>
-              <select id="book-difficulty" class="form-input">
-                <option value="EASY">Easy</option>
-                <option value="MEDIUM" selected>Medium</option>
-                <option value="HARD">Hard</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-read-time">Est. Read Time (min)</label>
-              <input type="number" id="book-read-time" class="form-input" placeholder="0" min="0">
-            </div>
+      <div class="workspace-layout flex gap-lg mt-lg" style="align-items:flex-start">
+        <!-- Sidebar Navigation for Workspace -->
+        <div class="workspace-sidebar" style="width:240px;flex-shrink:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+          <div class="flex flex-col" id="workspace-tabs">
+            ${tabs.map(tab => `
+              <button class="workspace-tab ${tab.id === currentTab ? 'active' : ''}" data-tab="${tab.id}" style="display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md) var(--space-lg);border:none;background:transparent;text-align:left;cursor:pointer;font-family:inherit;font-size:14px;color:var(--text-secondary);border-bottom:1px solid var(--border);transition:all 0.2s;">
+                <span class="material-symbols-outlined" style="font-size:18px">${tab.icon}</span> ${tab.label}
+              </button>
+            `).join('')}
           </div>
         </div>
 
-        <!-- Content Rights (Mandatory) -->
-        <div class="editor-form__section">
-          <h3 class="editor-form__section-title">⚖️ Content Rights (Required for Publishing)</h3>
-          <div class="editor-form__row">
-            <div class="form-group">
-              <label class="form-label" for="book-rights-status">Rights Status *</label>
-              <select id="book-rights-status" class="form-input">
-                <option value="RESTRICTED">Restricted (cannot publish)</option>
-                <option value="PUBLIC_DOMAIN">Public Domain</option>
-                <option value="OPEN_LICENSE">Open License</option>
-                <option value="AUTHORIZED">Authorized</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-license-name">License Name</label>
-              <input type="text" id="book-license-name" class="form-input" placeholder="e.g., CC BY 4.0, MIT">
-            </div>
-          </div>
-          <div class="editor-form__row mt-md">
-            <div class="form-group">
-              <label class="form-label" for="book-license-source">License Source URL</label>
-              <input type="url" id="book-license-source" class="form-input" placeholder="https://...">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="book-rights-holder">Rights Holder</label>
-              <input type="text" id="book-rights-holder" class="form-input" placeholder="Name or organization">
-            </div>
-          </div>
-          <div class="form-group mt-md">
-            <label class="form-label" for="book-permission-ref">Permission Reference</label>
-            <textarea id="book-permission-ref" class="form-input" placeholder="Link or description of permission documentation" rows="2"></textarea>
-          </div>
-          <div class="flex gap-lg mt-md" style="flex-wrap:wrap">
-            <label class="checkbox-label"><input type="checkbox" id="book-allow-download"> Allow Download</label>
-            <label class="checkbox-label"><input type="checkbox" id="book-allow-offline"> Allow Offline</label>
-            <label class="checkbox-label"><input type="checkbox" id="book-allow-share"> Allow Share</label>
-          </div>
-        </div>
-
-
-        <!-- Categories & Tags -->
-        <div class="editor-form__section">
-          <h3 class="editor-form__section-title">🏷️ Organization</h3>
-          <div class="editor-form__row">
-            <div class="form-group">
-              <label class="form-label">Categories</label>
-              <div id="category-checkboxes" class="flex gap-sm" style="flex-wrap:wrap">
-                <span class="text-body-small text-tertiary">Loading categories…</span>
+        <!-- Main Workspace Content -->
+        <div class="workspace-content" style="flex:1;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-xl);">
+          <form id="book-editor-form">
+            <!-- TAB: Basic -->
+            <div id="tab-content-basic" class="workspace-tab-pane ${currentTab === 'basic' ? '' : 'hidden'}">
+              <h3 class="mb-lg" style="font-size:18px;font-weight:600">Basic Information</h3>
+              <div class="editor-form__row flex gap-md mb-md">
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-title">Title *</label>
+                  <input type="text" id="book-title" class="form-input" placeholder="Enter book title" required>
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-author">Author *</label>
+                  <input type="text" id="book-author" class="form-input" placeholder="Author name">
+                </div>
+              </div>
+              <div class="editor-form__row flex gap-md mb-md">
+                <div class="form-group" style="width:120px">
+                  <label class="form-label" for="book-emoji">Emoji Icon</label>
+                  <input type="text" id="book-emoji" class="form-input" placeholder="📘">
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-cover-url">Cover Image URL *</label>
+                  <input type="url" id="book-cover-url" class="form-input" placeholder="https://..." required>
+                </div>
+              </div>
+              <div class="form-group mb-md">
+                <label class="form-label" for="book-description">Description *</label>
+                <textarea id="book-description" class="form-input" placeholder="Write a compelling description…" rows="4"></textarea>
+              </div>
+              <div class="editor-form__row flex gap-md mb-md">
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-language">Language *</label>
+                  <select id="book-language" class="form-input"><option value="">Loading...</option></select>
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-pages">Page Count</label>
+                  <input type="number" id="book-pages" class="form-input" placeholder="0" min="0">
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-difficulty">Difficulty</label>
+                  <select id="book-difficulty" class="form-input">
+                    <option value="EASY">Easy</option>
+                    <option value="MEDIUM" selected>Medium</option>
+                    <option value="HARD">Hard</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-read-time">Read Time (min)</label>
+                  <input type="number" id="book-read-time" class="form-input" placeholder="0" min="0">
+                </div>
               </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Subjects</label>
-              <div id="subject-checkboxes" class="flex gap-sm" style="flex-wrap:wrap">
-                <span class="text-body-small text-tertiary">Loading subjects…</span>
+
+            <!-- TAB: Organization -->
+            <div id="tab-content-organization" class="workspace-tab-pane ${currentTab === 'organization' ? '' : 'hidden'}">
+              <h3 class="mb-lg" style="font-size:18px;font-weight:600">Organization & Taxonomy</h3>
+              <div class="form-group mb-md">
+                <label class="form-label">Categories</label>
+                <div id="category-checkboxes" class="flex gap-sm" style="flex-wrap:wrap"><span class="text-tertiary">Loading...</span></div>
+              </div>
+              <div class="form-group mb-md">
+                <label class="form-label">Subjects</label>
+                <div id="subject-checkboxes" class="flex gap-sm" style="flex-wrap:wrap"><span class="text-tertiary">Loading...</span></div>
+              </div>
+              <div class="form-group mb-md">
+                <label class="form-label" for="book-tags">Tags (comma separated)</label>
+                <input type="text" id="book-tags" class="form-input" placeholder="physics, mechanics">
+              </div>
+              <div class="form-group mb-md">
+                <label class="form-label" for="book-exam-tags">Exam Tags (comma separated)</label>
+                <input type="text" id="book-exam-tags" class="form-input" placeholder="JEE, NEET">
               </div>
             </div>
-          </div>
-          <div class="form-group mt-md">
-            <label class="form-label" for="book-tags">Tags (comma separated)</label>
-            <input type="text" id="book-tags" class="form-input" placeholder="physics, mechanics, newton">
-          </div>
-          <div class="form-group mt-md">
-            <label class="form-label" for="book-exam-tags">Exam Tags (comma separated)</label>
-            <input type="text" id="book-exam-tags" class="form-input" placeholder="JEE, NEET, UPSC">
-          </div>
-        </div>
 
-        <!-- Questions & Answers -->
-        ${isEdit ? `
-        <div class="editor-form__section">
-          <div class="flex items-center justify-between">
-            <h3 class="editor-form__section-title">❓ Questions & Answers</h3>
-            <button class="btn btn-secondary btn-sm" onclick="AdminBookEditor.openQnAModal(); return false;">
-              <span class="material-symbols-outlined" style="font-size:16px">add</span> Add Q&A
-            </button>
-          </div>
-          <div id="qna-list" class="mt-md">
-            <div class="text-body-small text-tertiary">Loading Questions...</div>
-          </div>
+            <!-- TAB: Rights -->
+            <div id="tab-content-rights" class="workspace-tab-pane ${currentTab === 'rights' ? '' : 'hidden'}">
+              <h3 class="mb-lg" style="font-size:18px;font-weight:600">Content Rights & Access</h3>
+              <div class="editor-form__row flex gap-md mb-md">
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-rights-status">Rights Status *</label>
+                  <select id="book-rights-status" class="form-input">
+                    <option value="RESTRICTED">Restricted (cannot publish)</option>
+                    <option value="PUBLIC_DOMAIN">Public Domain</option>
+                    <option value="OPEN_LICENSE">Open License</option>
+                    <option value="AUTHORIZED">Authorized</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-license-name">License Name</label>
+                  <input type="text" id="book-license-name" class="form-input" placeholder="e.g., CC BY 4.0">
+                </div>
+              </div>
+              <div class="editor-form__row flex gap-md mb-md">
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-license-source">License Source URL</label>
+                  <input type="url" id="book-license-source" class="form-input" placeholder="https://...">
+                </div>
+                <div class="form-group flex-1">
+                  <label class="form-label" for="book-rights-holder">Rights Holder</label>
+                  <input type="text" id="book-rights-holder" class="form-input" placeholder="Name or org">
+                </div>
+              </div>
+              <div class="form-group mb-md">
+                <label class="form-label" for="book-permission-ref">Permission Reference</label>
+                <textarea id="book-permission-ref" class="form-input" rows="2"></textarea>
+              </div>
+              <div class="flex gap-lg mt-md" style="flex-wrap:wrap">
+                <label class="checkbox-label"><input type="checkbox" id="book-allow-download"> Allow Download</label>
+                <label class="checkbox-label"><input type="checkbox" id="book-allow-offline"> Allow Offline</label>
+                <label class="checkbox-label"><input type="checkbox" id="book-allow-share"> Allow Share</label>
+              </div>
+            </div>
+
+            <!-- Chapters Tab -->
+            <div id="tab-content-chapters" class="workspace-tab-pane ${currentTab === 'chapters' ? '' : 'hidden'}">
+              <div class="flex items-center justify-between mb-md">
+                <h3 style="font-size:18px;font-weight:600">Chapters</h3>
+                <button class="btn btn-secondary btn-sm" onclick="AdminBookEditor.openChapterModal(); return false;">Add Chapter</button>
+              </div>
+              <div id="chapters-list"><div class="text-tertiary text-center p-md">Loading Chapters...</div></div>
+            </div>
+            
+            <div id="tab-content-qna" class="workspace-tab-pane ${currentTab === 'qna' ? '' : 'hidden'}">
+              <div class="flex items-center justify-between mb-md">
+                <h3 style="font-size:18px;font-weight:600">Questions & Answers</h3>
+                <button class="btn btn-secondary btn-sm" onclick="AdminBookEditor.openQnAModal(); return false;">Add Q&A</button>
+              </div>
+              <div id="qna-list"><div class="text-tertiary text-center p-md">Loading Questions...</div></div>
+            </div>
+
+            <!-- Quizzes Tab -->
+            <div id="tab-content-quizzes" class="workspace-tab-pane ${currentTab === 'quizzes' ? '' : 'hidden'}">
+              <div class="flex items-center justify-between mb-md">
+                <h3 style="font-size:18px;font-weight:600">Quizzes</h3>
+                <button class="btn btn-secondary btn-sm" onclick="AdminBookEditor.openQuizModal(); return false;">Add Quiz</button>
+              </div>
+              <div id="quizzes-list"><div class="text-tertiary text-center p-md">Loading Quizzes...</div></div>
+            </div>
+
+            <!-- Flashcards Tab -->
+            <div id="tab-content-flashcards" class="workspace-tab-pane ${currentTab === 'flashcards' ? '' : 'hidden'}">
+              <div class="flex items-center justify-between mb-md">
+                <h3 style="font-size:18px;font-weight:600">Flashcard Decks</h3>
+                <button class="btn btn-secondary btn-sm" onclick="AdminBookEditor.openFlashcardSetModal(); return false;">Add Deck</button>
+              </div>
+              <div id="flashcards-list"><div class="text-tertiary text-center p-md">Loading Flashcard Decks...</div></div>
+            </div>
+            <div id="tab-content-resources" class="workspace-tab-pane ${currentTab === 'resources' ? '' : 'hidden'} text-center p-xl">
+              <h3 class="mb-md">Resources</h3><p class="text-tertiary">Book resources will be integrated here.</p>
+            </div>
+            <div id="tab-content-media" class="workspace-tab-pane ${currentTab === 'media' ? '' : 'hidden'} text-center p-xl">
+              <h3 class="mb-md">Media</h3><p class="text-tertiary">Media library will be integrated here.</p>
+            </div>
+            <div id="tab-content-preview" class="workspace-tab-pane ${currentTab === 'preview' ? '' : 'hidden'} text-center p-xl">
+              <h3 class="mb-md">Preview</h3><p class="text-tertiary">Book preview will be integrated here.</p>
+            </div>
+            
+            <div id="tab-content-settings" class="workspace-tab-pane ${currentTab === 'settings' ? '' : 'hidden'}">
+              <h3 class="mb-lg" style="font-size:18px;font-weight:600">Settings</h3>
+              <div class="form-group mb-md flex items-center">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="book-is-featured"> Featured Book
+                </label>
+              </div>
+            </div>
+
+          </form>
         </div>
-        ` : `<div class="editor-form__section text-center"><p class="text-tertiary text-body-small">Save the book first to add Questions & Answers.</p></div>`}
       </div>
+      <style>
+        .workspace-tab.active {
+          background: var(--bg-primary) !important;
+          color: var(--text-primary) !important;
+          font-weight: 600;
+          border-left: 3px solid var(--accent) !important;
+        }
+        .workspace-tab:hover:not(.active) {
+          background: rgba(0,0,0,0.02) !important;
+        }
+      </style>
     `;
 
+    bindEvents();
     loadFormData(isEdit);
-    if (isEdit) loadQnA();
+    if (isEdit) {
+      loadQnA();
+      loadChapters();
+      loadQuizzes();
+      loadFlashcards();
+    }
+  }
+
+  function bindEvents() {
+    document.querySelectorAll('.workspace-tab').forEach(tabBtn => {
+      tabBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tabId = tabBtn.getAttribute('data-tab');
+        currentTab = tabId;
+        
+        document.querySelectorAll('.workspace-tab').forEach(b => b.classList.remove('active'));
+        tabBtn.classList.add('active');
+
+        document.querySelectorAll('.workspace-tab-pane').forEach(p => p.classList.add('hidden'));
+        document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
+      });
+    });
   }
 
   async function loadQnA() {
@@ -228,13 +319,13 @@ window.AdminBookEditor = (() => {
   };
 
   function escapeHtml(str) {
+    if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   }
 
   async function loadFormData(isEdit) {
-    // Load categories, subjects, and languages
     try {
       const [catSettled, subSettled, langSettled] = await Promise.allSettled([
         ApiClient.admin.getCategories(),
@@ -246,17 +337,13 @@ window.AdminBookEditor = (() => {
       subjects = subSettled.status === 'fulfilled' ? (subSettled.value.data || []) : [];
       const languages = langSettled.status === 'fulfilled' ? (langSettled.value.data || []) : [];
 
-      if (catSettled.status === 'rejected') console.error('Failed to load categories:', catSettled.reason);
-      if (subSettled.status === 'rejected') console.error('Failed to load subjects:', subSettled.reason);
-      if (langSettled.status === 'rejected') console.error('Failed to load languages:', langSettled.reason);
-
       document.getElementById('category-checkboxes').innerHTML = categories.length
         ? categories.map(c => `<label class="checkbox-label"><input type="checkbox" value="${c.id}" class="cat-checkbox"> ${c.name}</label>`).join('')
-        : '<span class="text-body-small text-tertiary">No categories yet. Add from Categories page.</span>';
+        : '<span class="text-body-small text-tertiary">No categories.</span>';
 
       document.getElementById('subject-checkboxes').innerHTML = subjects.length
         ? subjects.map(s => `<label class="checkbox-label"><input type="checkbox" value="${s.id}" class="sub-checkbox"> ${s.name}</label>`).join('')
-        : '<span class="text-body-small text-tertiary">No subjects yet. Add from Categories page.</span>';
+        : '<span class="text-body-small text-tertiary">No subjects.</span>';
         
       const langSelect = document.getElementById('book-language');
       if (languages.length) {
@@ -265,10 +352,9 @@ window.AdminBookEditor = (() => {
         langSelect.innerHTML = '<option value="en">English (Default)</option>';
       }
     } catch (err) {
-      console.error('Failed to load categories/subjects/languages:', err);
+      console.error('Failed to load taxonomies:', err);
     }
 
-    // If editing, populate form
     if (isEdit) {
       try {
         const result = await ApiClient.getBook(editingBookId);
@@ -295,7 +381,6 @@ window.AdminBookEditor = (() => {
         document.getElementById('book-exam-tags').value = (book.examTags || []).join(', ');
         document.getElementById('book-is-featured').checked = (book.featured_order || book.featuredOrder) != null;
 
-        // Check category/subject boxes
         (book.categories || []).map(c => c.id).forEach(id => {
           const cb = document.querySelector(`.cat-checkbox[value="${id}"]`);
           if (cb) cb.checked = true;
@@ -305,7 +390,7 @@ window.AdminBookEditor = (() => {
           if (cb) cb.checked = true;
         });
       } catch (err) {
-        Toast.error('Failed to load book: ' + err.message);
+        Toast.error('Failed to load book');
       }
     }
   }
@@ -362,19 +447,173 @@ window.AdminBookEditor = (() => {
     try {
       if (editingBookId) {
         await ApiClient.admin.updateBook(editingBookId, body);
-        Toast.success('Book updated successfully');
+        Toast.success('Book updated');
       } else {
         await ApiClient.admin.createBook(body);
-        Toast.success('Book created successfully');
+        Toast.success('Book created');
       }
       AdminApp.navigate('books');
     } catch (err) {
       Toast.error(err.message);
     } finally {
-      if (saveDraftBtn) { saveDraftBtn.disabled = false; saveDraftBtn.textContent = 'Save as Draft'; }
-      if (savePublishBtn) { savePublishBtn.disabled = false; savePublishBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px">publish</span> Save & Publish'; }
+      if (saveDraftBtn) { saveDraftBtn.disabled = false; saveDraftBtn.textContent = 'Save Draft'; }
+      if (savePublishBtn) { savePublishBtn.disabled = false; savePublishBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px">publish</span> Publish'; }
     }
   }
+
+  async function loadChapters() {
+    try {
+      const res = await ApiClient.admin.getChapters(editingBookId);
+      const items = res.data || [];
+      const list = document.getElementById('chapters-list');
+      if (items.length === 0) {
+        list.innerHTML = '<div class="text-body-small text-tertiary text-center p-md">No chapters added yet.</div>';
+        return;
+      }
+      list.innerHTML = items.map(i => `
+        <div class="card mb-sm p-sm flex items-center justify-between" style="border:1px solid var(--border)">
+          <div>
+            <div class="text-body-medium" style="font-weight:600">${i.chapter_number}. ${escapeHtml(i.title)}</div>
+            <div class="text-body-small text-secondary mt-xs">${i.status}</div>
+          </div>
+          <button class="btn-icon" onclick="AdminBookEditor.deleteChapter('${i.id}'); return false;">
+            <span class="material-symbols-outlined" style="color:var(--error)">delete</span>
+          </button>
+        </div>
+      `).join('');
+    } catch (e) { document.getElementById('chapters-list').innerHTML = '<div class="text-error">Failed to load Chapters</div>'; }
+  }
+
+  async function loadQuizzes() {
+    try {
+      const res = await ApiClient.admin.getQuizzes(editingBookId);
+      const items = res.data || [];
+      const list = document.getElementById('quizzes-list');
+      if (items.length === 0) {
+        list.innerHTML = '<div class="text-body-small text-tertiary text-center p-md">No quizzes added yet.</div>';
+        return;
+      }
+      list.innerHTML = items.map(i => `
+        <div class="card mb-sm p-sm flex items-center justify-between" style="border:1px solid var(--border)">
+          <div>
+            <div class="text-body-medium" style="font-weight:600">${escapeHtml(i.title)}</div>
+            <div class="text-body-small text-secondary mt-xs">${i.status} • ${i.passing_score_percent}% to pass</div>
+          </div>
+          <button class="btn-icon" onclick="AdminBookEditor.deleteQuiz('${i.id}'); return false;">
+            <span class="material-symbols-outlined" style="color:var(--error)">delete</span>
+          </button>
+        </div>
+      `).join('');
+    } catch (e) { document.getElementById('quizzes-list').innerHTML = '<div class="text-error">Failed to load Quizzes</div>'; }
+  }
+
+  async function loadFlashcards() {
+    try {
+      const res = await ApiClient.admin.getFlashcards(editingBookId);
+      const items = res.data || [];
+      const list = document.getElementById('flashcards-list');
+      if (items.length === 0) {
+        list.innerHTML = '<div class="text-body-small text-tertiary text-center p-md">No flashcard decks added yet.</div>';
+        return;
+      }
+      list.innerHTML = items.map(i => `
+        <div class="card mb-sm p-sm flex items-center justify-between" style="border:1px solid var(--border)">
+          <div>
+            <div class="text-body-medium" style="font-weight:600">${escapeHtml(i.title)}</div>
+            <div class="text-body-small text-secondary mt-xs">${i.status}</div>
+          </div>
+          <button class="btn-icon" onclick="AdminBookEditor.deleteFlashcardSet('${i.id}'); return false;">
+            <span class="material-symbols-outlined" style="color:var(--error)">delete</span>
+          </button>
+        </div>
+      `).join('');
+    } catch (e) { document.getElementById('flashcards-list').innerHTML = '<div class="text-error">Failed to load Flashcards</div>'; }
+  }
+
+  exports.openChapterModal = function() {
+    Modal.form('Add Chapter', `
+      <div class="form-group mb-md">
+        <label class="form-label">Chapter Number</label>
+        <input type="number" id="chapter-number" class="form-input" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" id="chapter-title" class="form-input">
+      </div>
+    `, async () => {
+      const num = parseInt(document.getElementById('chapter-number').value, 10);
+      const title = document.getElementById('chapter-title').value.trim();
+      if (!title) { Toast.error('Title required'); return false; }
+      try {
+        await ApiClient.admin.createChapter(editingBookId, { chapterNumber: num, title });
+        Toast.success('Chapter added');
+        loadChapters();
+        return true;
+      } catch (err) { Toast.error(err.message); return false; }
+    });
+  };
+
+  exports.deleteChapter = function(id) {
+    Modal.confirm('Delete Chapter', 'Are you sure?', async () => {
+      await ApiClient.admin.deleteChapter(editingBookId, id);
+      loadChapters();
+    });
+  };
+
+  exports.openQuizModal = function() {
+    Modal.form('Add Quiz', `
+      <div class="form-group mb-md">
+        <label class="form-label">Title</label>
+        <input type="text" id="quiz-title" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Passing Score (%)</label>
+        <input type="number" id="quiz-passing" class="form-input" value="60" min="0" max="100">
+      </div>
+    `, async () => {
+      const title = document.getElementById('quiz-title').value.trim();
+      const passing = parseInt(document.getElementById('quiz-passing').value, 10);
+      if (!title) { Toast.error('Title required'); return false; }
+      try {
+        await ApiClient.admin.createQuiz(editingBookId, { title, passingScorePercent: passing });
+        Toast.success('Quiz added');
+        loadQuizzes();
+        return true;
+      } catch (err) { Toast.error(err.message); return false; }
+    });
+  };
+
+  exports.deleteQuiz = function(id) {
+    Modal.confirm('Delete Quiz', 'Are you sure?', async () => {
+      await ApiClient.admin.deleteQuiz(editingBookId, id);
+      loadQuizzes();
+    });
+  };
+
+  exports.openFlashcardSetModal = function() {
+    Modal.form('Add Flashcard Deck', `
+      <div class="form-group mb-md">
+        <label class="form-label">Title</label>
+        <input type="text" id="deck-title" class="form-input">
+      </div>
+    `, async () => {
+      const title = document.getElementById('deck-title').value.trim();
+      if (!title) { Toast.error('Title required'); return false; }
+      try {
+        await ApiClient.admin.createFlashcardSet(editingBookId, { title });
+        Toast.success('Deck added');
+        loadFlashcards();
+        return true;
+      } catch (err) { Toast.error(err.message); return false; }
+    });
+  };
+
+  exports.deleteFlashcardSet = function(id) {
+    Modal.confirm('Delete Deck', 'Are you sure?', async () => {
+      await ApiClient.admin.deleteFlashcardSet(editingBookId, id);
+      loadFlashcards();
+    });
+  };
 
   exports.render = render;
   exports.save = save;
