@@ -4,7 +4,7 @@ const path = require('path');
 const indexJsPath = path.join(__dirname, 'index.js');
 let indexJs = fs.readFileSync(indexJsPath, 'utf8');
 
-const handlersCode = \
+const handlersCode = `
 // --- Phase 6 Handlers (Learner Experience) -------------------------
 
 async function sendBrevoEmail(toEmail, toName, subject, htmlContent, env) {
@@ -48,7 +48,7 @@ async function handleAdminCreateEnrollment(body, admin, env) {
   if (!body.courseId || !body.userId) throw { status: 400, code: 'VALIDATION_ERROR', message: 'courseId and userId are required' };
   
   const id = generateId();
-  await env.DB.prepare(\INSERT INTO enrollments (id, user_id, course_id, status) VALUES (?, ?, ?, ?)\).bind(
+  await env.DB.prepare('INSERT INTO enrollments (id, user_id, course_id, status) VALUES (?, ?, ?, ?)').bind(
     id, body.userId, body.courseId, body.status || 'ACTIVE'
   ).run();
   
@@ -56,7 +56,7 @@ async function handleAdminCreateEnrollment(body, admin, env) {
   const userEmail = body.userEmail || body.userId; // Usually we'd look up the user's email from Firebase
   
   if (userEmail && userEmail.includes('@')) {
-    await sendBrevoEmail(userEmail, userEmail, `You've been enrolled in ${course.title}`, `<p>Hello!</p><p>You have been successfully enrolled in the course: <strong>${course.title}</strong>.</p><p>Happy learning!</p>`, env);
+    await sendBrevoEmail(userEmail, userEmail, \`You've been enrolled in \${course.title}\`, \`<p>Hello!</p><p>You have been successfully enrolled in the course: <strong>\${course.title}</strong>.</p><p>Happy learning!</p>\`, env);
   }
   
   const item = await env.DB.prepare('SELECT * FROM enrollments WHERE id = ?').bind(id).first();
@@ -77,7 +77,7 @@ async function handleAdminIssueCertificate(body, admin, env) {
   const id = generateId();
   const certNumber = 'CERT-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
   
-  await env.DB.prepare(\INSERT INTO certificates (id, course_id, user_id, certificate_number, verification_url, status) VALUES (?, ?, ?, ?, ?, ?)\).bind(
+  await env.DB.prepare('INSERT INTO certificates (id, course_id, user_id, certificate_number, verification_url, status) VALUES (?, ?, ?, ?, ?, ?)').bind(
     id, body.courseId, body.userId, certNumber, body.verificationUrl || '', 'ISSUED'
   ).run();
   
@@ -85,7 +85,7 @@ async function handleAdminIssueCertificate(body, admin, env) {
   const userEmail = body.userEmail || body.userId;
   
   if (userEmail && userEmail.includes('@')) {
-    await sendBrevoEmail(userEmail, userEmail, `Certificate of Completion for ${course.title}`, `<p>Congratulations!</p><p>You have successfully completed <strong>${course.title}</strong>.</p><p>Your certificate number is: ${certNumber}</p>`, env);
+    await sendBrevoEmail(userEmail, userEmail, \`Certificate of Completion for \${course.title}\`, \`<p>Congratulations!</p><p>You have successfully completed <strong>\${course.title}</strong>.</p><p>Your certificate number is: \${certNumber}</p>\`, env);
   }
   
   const item = await env.DB.prepare('SELECT * FROM certificates WHERE id = ?').bind(id).first();
@@ -102,7 +102,7 @@ async function handleCreateDiscussion(courseId, body, user, env) {
   if (!body.title || !body.content) throw { status: 400, code: 'VALIDATION_ERROR', message: 'title and content are required' };
   
   const id = generateId();
-  await env.DB.prepare(\INSERT INTO discussions (id, course_id, lesson_id, user_id, title, content) VALUES (?, ?, ?, ?, ?, ?)\).bind(
+  await env.DB.prepare('INSERT INTO discussions (id, course_id, lesson_id, user_id, title, content) VALUES (?, ?, ?, ?, ?, ?)').bind(
     id, courseId, body.lessonId || null, user.uid, body.title, body.content
   ).run();
   
@@ -122,7 +122,7 @@ async function handleAdminCreateLearningPath(body, admin, env) {
   if (!body.title) throw { status: 400, code: 'VALIDATION_ERROR', message: 'title is required' };
   
   const id = generateId();
-  await env.DB.prepare(\INSERT INTO learning_paths (id, title, description, status) VALUES (?, ?, ?, ?)\).bind(
+  await env.DB.prepare('INSERT INTO learning_paths (id, title, description, status) VALUES (?, ?, ?, ?)').bind(
     id, body.title, body.description || null, body.status || 'DRAFT'
   ).run();
   
@@ -130,9 +130,9 @@ async function handleAdminCreateLearningPath(body, admin, env) {
   return successResponse(item);
 }
 
-\;
+`;
 
-const adminRoutes = \
+const adminRoutes = `
         // Admin Phase 6 (Enrollments, Certificates, Learning Paths)
         else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/admin/courses/:id/enrollments'))) {
           response = await handleAdminGetEnrollments(routeParams.id, admin, env);
@@ -152,20 +152,20 @@ const adminRoutes = \
         else if (method === 'POST' && path === '/api/v1/admin/learning-paths') {
           response = await handleAdminCreateLearningPath(body, admin, env);
         }
-\;
+`;
 
-const publicRoutes = \
+const publicRoutes = `
         // Phase 6 Public (Discussions)
         else if (method === 'GET' && (routeParams = matchRoute(path, '/api/v1/courses/:id/discussions'))) {
           response = await handleGetDiscussions(routeParams.id, params, env);
         }
-\;
+`;
 
-const authRoutes = \
+const authRoutes = `
         else if (method === 'POST' && (routeParams = matchRoute(path, '/api/v1/courses/:id/discussions'))) {
           response = await handleCreateDiscussion(routeParams.id, body, user, env);
         }
-\;
+`;
 
 // Inject handlers before export default {
 if (!indexJs.includes('Phase 6 Handlers')) {

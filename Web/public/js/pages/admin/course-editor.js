@@ -565,7 +565,7 @@ window.AdminCourseEditor = (() => {
       
       if (!title) { Toast.error('Title is required'); return false; }
       
-      const body = { title, lessonType: type, contentUrl: url, isPreview };
+      const body = { title, lessonType: type, content: url, isFreePreview: isPreview, courseId: editingCourseId };
       
       try {
         let savedLessonId = lessonId;
