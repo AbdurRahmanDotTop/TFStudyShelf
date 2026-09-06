@@ -84,6 +84,10 @@ window.ApiClient = (() => {
       return request(`/api/v1/books${qs ? '?' + qs : ''}`);
     },
     getBook: (id) => request(`/api/v1/books/${id}`),
+    getCourses: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request(`/api/v1/courses${qs ? '?' + qs : ''}`);
+    },
     
     getChapters: (bookId) => request(`/api/v1/books/${bookId}/chapters`),
     getQuestions: (bookId) => request(`/api/v1/books/${bookId}/questions`),
