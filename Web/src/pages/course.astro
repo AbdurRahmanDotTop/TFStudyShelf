@@ -1,0 +1,196 @@
+---
+import UserLayout from '../layouts/UserLayout.astro';
+---
+<UserLayout title="TF Study Shelf — Course Details">
+  <div class="user-content fade-in" id="course-detail-container">
+    <div class="loading-overlay" style="position:relative;height:300px;background:none"><div class="spinner"></div></div>
+  </div>
+
+  <script is:inline>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (typeof ApiClient === 'undefined') return;
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      const container = document.getElementById('course-detail-container');
+
+      if (!id) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">🎓</div>
+            <p class="empty-state__title">Course not found</p>
+            <p class="empty-state__message">Please provide a valid course ID.</p>
+            <a class="btn btn-primary" href="/explore">Browse Library</a>
+          </div>`;
+        return;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+      try {
+        const courseResult = await ApiClient.getCourse(id);
+        const course = courseResult.data;
+
+        document.title = course.title + ' — TF Study Shelf';
+
+        const sections = course.sections || [];
+        const lessons = course.lessons || [];
+        
+        let curriculumHtml = '';
+        if (sections.length > 0) {
+          curriculumHtml += '<div class="card" style="padding:0; margin-bottom:var(--space-lg);">';
+          curriculumHtml += '<div style="padding:var(--space-md) var(--space-lg);border-bottom:1px solid var(--border)"><h3 class="text-title-medium">Curriculum</h3></div>';
+          curriculumHtml += '<div class="chapter-list">';
+          
+          sections.forEach(sec => {
+            const secLessons = lessons.filter(l => l.section_id === sec.id);
+            curriculumHtml += '<div class="chapter-item" style="display:block; padding:16px;">';
+            curriculumHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+            curriculumHtml += '<div class="chapter-item__title" style="margin:0; font-size:16px;">' + escapeHtml(sec.title) + '</div>';
+            curriculumHtml += '<div class="chapter-item__meta" style="margin:0;"><span>📄 ' + secLessons.length + ' lessons</span></div>';
+            curriculumHtml += '</div>';
+            
+            if (sec.description) {
+              curriculumHtml += '<p class="text-body-small text-secondary" style="margin-bottom:12px;">' + escapeHtml(sec.description) + '</p>';
+            }
+            
+            if (secLessons.length > 0) {
+              curriculumHtml += '<div style="margin-top:12px; padding-left:12px; border-left:2px solid var(--border);">';
+              secLessons.forEach(lesson => {
+                let icon = 'article';
+                if (lesson.lesson_type === 'VIDEO') icon = 'play_circle';
+                else if (lesson.lesson_type === 'QUIZ') icon = 'quiz';
+                
+                curriculumHtml += '<div style="display:flex; align-items:center; gap:8px; padding:8px 0;">';
+                curriculumHtml += '<span class="material-symbols-outlined" style="font-size:18px; color:var(--text-secondary);">' + icon + '</span>';
+                curriculumHtml += '<span class="text-body-medium">' + escapeHtml(lesson.title) + '</span>';
+                if (lesson.is_free) {
+                  curriculumHtml += '<span class="chip" style="font-size:10px; padding:2px 6px; background:var(--accent); color:#fff; margin-left:auto;">Free</span>';
+                }
+                curriculumHtml += '</div>';
+              });
+              curriculumHtml += '</div>';
+            } else {
+              curriculumHtml += '<div class="text-body-small text-secondary mt-sm">No lessons available in this section.</div>';
+            }
+            curriculumHtml += '</div>';
+          });
+          
+          curriculumHtml += '</div></div>';
+        }
+
+        let catHtml = (course.categories || []).map(c => '<span class="chip chip-outline" style="font-size:11px">' + escapeHtml(c.name) + '</span>').join('');
+        
+        let coverHtml = course.cover_image_url
+          ? '<img src="' + escapeHtml(course.cover_image_url) + '" alt="' + escapeHtml(course.title) + '" style="width:100%; height:auto; object-fit:cover; border-radius:8px; display:block;">'
+          : '<div style="width:100%;height:100%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:36px;font-weight:700;border-radius:8px;aspect-ratio:16/9;">' + escapeHtml(course.title[0]) + '</div>';
+
+        container.innerHTML = `
+          <div class="book-detail fade-in">
+            <div class="book-detail__header" style="flex-wrap: wrap; gap: 24px;">
+              <div class="book-detail__cover" style="min-width: 250px; flex: 1 1 250px;">
+                ${coverHtml}
+              </div>
+              <div class="book-detail__info" style="flex: 2 1 300px;">
+                <h1 class="book-detail__title">${escapeHtml(course.title)}</h1>
+                ${course.subtitle ? '<p class="book-detail__author" style="margin-bottom:12px;">' + escapeHtml(course.subtitle) + '</p>' : ''}
+                
+                <div class="book-detail__meta">
+                  <span class="chip" style="font-size:11px;padding:3px 8px">${escapeHtml(course.course_type || 'Self Paced')}</span>
+                  <span>⭐ ${course.rating ? course.rating.toFixed(1) : '—'}</span>
+                  ${course.certificate_enabled ? '<span>🏆 Certificate</span>' : ''}
+                </div>
+                
+                <div class="flex gap-sm mt-sm" style="flex-wrap:wrap">
+                  ${catHtml}
+                </div>
+                
+                <div class="book-detail__actions" style="margin-top:24px; display:flex; flex-wrap:wrap; gap:12px;">
+                  <button class="btn btn-gradient btn-lg" onclick="showAppDownloadPopup()" style="flex: 1 1 auto; justify-content:center;">
+                    <span class="material-symbols-outlined" style="font-size:20px">school</span> ${course.is_free ? 'Start Learning - Free' : 'Enroll Now - ' + (course.price ? (course.currency || '$') + course.price : 'Paid')}
+                  </button>
+                  <button class="btn btn-secondary" style="flex: 0 1 auto; justify-content:center;">
+                    <span class="material-symbols-outlined" style="font-size:18px">favorite_border</span>
+                  </button>
+                </div>
+              </div>
+            </div>           </div>
+
+            <div class="card mb-lg mt-md">
+              <h3 class="text-title-medium mb-sm">Description</h3>
+              <p class="book-detail__description" style="margin-bottom:0">${escapeHtml(course.description)}</p>
+              ${course.prerequisites ? '<h4 class="text-title-small mt-md mb-xs">Prerequisites</h4><p class="text-body-small text-secondary">' + escapeHtml(course.prerequisites) + '</p>' : ''}
+            </div>
+            
+            ${curriculumHtml}
+
+          </div>
+          
+          <!-- App Download Popup -->
+          <div id="app-download-modal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+            <div class="modal-content card" style="max-width:400px; width:100%; padding:24px; position:relative; box-sizing:border-box;">
+              <button onclick="closeAppDownloadPopup()" style="position:absolute; top:12px; right:12px; background:none; border:none; cursor:pointer;">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+              <div style="text-align:center; margin-bottom:16px;">
+                <span class="material-symbols-outlined" style="font-size:48px; color:var(--primary)">app_shortcut</span>
+              </div>
+              <h3 class="text-title-medium" style="text-align:center; margin-bottom:12px;">App Download Required</h3>
+              <p class="text-body-medium text-secondary" style="text-align:center; margin-bottom:24px;">To read this book / enroll in this course, please download our mobile app.</p>
+              
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <a id="android-download-btn" href="#" class="btn btn-primary" style="display:none; justify-content:center; align-items:center; gap:8px;" target="_blank">
+                  <span class="material-symbols-outlined">android</span> Download Android App
+                </a>
+                <a id="ios-download-btn" href="#" class="btn btn-secondary" style="display:none; justify-content:center; align-items:center; gap:8px;" target="_blank">
+                  <span class="material-symbols-outlined">apple</span> Download iOS App
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">🎓</div>
+            <p class="empty-state__title">Course not found</p>
+            <p class="empty-state__message">${err.message}</p>
+            <a class="btn btn-primary" href="/explore">Browse Library</a>
+          </div>`;
+      }
+    });
+
+    window.showAppDownloadPopup = async function() {
+      const modal = document.getElementById('app-download-modal');
+      const androidBtn = document.getElementById('android-download-btn');
+      const iosBtn = document.getElementById('ios-download-btn');
+      
+      // Fetch dynamic links
+      try {
+        const data = await ApiClient.getConfig();
+        if (data && data.success && data.data) {
+          if (data.data.android_app_link) {
+            androidBtn.href = data.data.android_app_link;
+            androidBtn.style.display = 'flex';
+          }
+          if (data.data.ios_app_link) {
+            iosBtn.href = data.data.ios_app_link;
+            iosBtn.style.display = 'flex';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch app links', e);
+      }
+      
+      modal.style.display = 'flex';
+    };
+
+    window.closeAppDownloadPopup = function() {
+      document.getElementById('app-download-modal').style.display = 'none';
+    };
+  </script>
+</UserLayout>

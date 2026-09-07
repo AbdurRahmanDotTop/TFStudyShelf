@@ -127,6 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_course_lessons_course ON course_lessons(course_id
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'BOOK',
   description TEXT,
   icon_url TEXT,
   display_order INTEGER DEFAULT 0,

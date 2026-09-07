@@ -6,12 +6,17 @@ window.AdminCategories = (() => {
   let categories = [];
   let subjects = [];
 
-  async function render(container) {
+  let currentType = 'BOOK';
+
+  async function render(container, type = 'BOOK') {
+    currentType = type;
+    const titlePrefix = type === 'COURSE' ? 'Course' : 'Book';
+    
     container.innerHTML = `
       <div class="admin-page-header">
         <div>
-          <h1 class="admin-page-header__title">Categories & Subjects</h1>
-          <p class="admin-page-header__subtitle">Organize your content library</p>
+          <h1 class="admin-page-header__title">${titlePrefix} Categories & Subjects</h1>
+          <p class="admin-page-header__subtitle">Organize your ${titlePrefix.toLowerCase()} library</p>
         </div>
       </div>
 
@@ -50,7 +55,7 @@ window.AdminCategories = (() => {
   async function loadData() {
     try {
       const [catSettled, subSettled] = await Promise.allSettled([
-        ApiClient.admin.getCategories(),
+        ApiClient.admin.getCategories(currentType),
         ApiClient.admin.getSubjects()
       ]);
 
@@ -149,6 +154,7 @@ window.AdminCategories = (() => {
       try {
         await ApiClient.admin.createCategory({
           name,
+          type: currentType,
           description: document.getElementById('cat-desc').value.trim() || null,
           isActive: document.getElementById('cat-active').checked
         });

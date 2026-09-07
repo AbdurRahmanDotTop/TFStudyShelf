@@ -328,7 +328,7 @@ window.AdminBookEditor = (() => {
   async function loadFormData(isEdit) {
     try {
       const [catSettled, subSettled, langSettled] = await Promise.allSettled([
-        ApiClient.admin.getCategories(),
+        ApiClient.admin.getCategories('BOOK'),
         ApiClient.admin.getSubjects(),
         ApiClient.admin.getLanguages()
       ]);

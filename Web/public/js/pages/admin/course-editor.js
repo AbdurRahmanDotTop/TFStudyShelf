@@ -262,7 +262,7 @@ window.AdminCourseEditor = (() => {
   async function loadFormData(isEdit) {
     try {
       const [catSettled, subSettled] = await Promise.allSettled([
-        ApiClient.admin.getCategories(),
+        ApiClient.admin.getCategories('COURSE'),
         ApiClient.admin.getSubjects()
       ]);
       

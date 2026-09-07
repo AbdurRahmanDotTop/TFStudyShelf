@@ -34,8 +34,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
   </div>
 
-  <script type="module" is:inline>
-    import { api } from '/js/api/client.js';
+  <script is:inline>
+    // client.js is loaded globally in the layout
 
     document.addEventListener('DOMContentLoaded', async () => {
       const form = document.getElementById('settings-form');
@@ -43,7 +43,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       
       // Load existing config
       try {
-        const response = await api.get('/admin/config');
+        const response = await ApiClient.admin.getConfig();
         if (response.success && response.data) {
           const configs = response.data;
           const androidConfig = configs.find(c => c.key === 'android_app_link');
@@ -67,7 +67,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         btnSave.disabled = true;
 
         try {
-          const res = await api.put('/admin/config', {
+          const res = await ApiClient.admin.updateConfig({
             configs: [
               { key: 'android_app_link', value: androidLink, description: 'Google Play Store link or direct APK link' },
               { key: 'ios_app_link', value: iosLink, description: 'Apple App Store link' }

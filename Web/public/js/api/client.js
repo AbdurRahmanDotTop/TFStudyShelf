@@ -78,6 +78,7 @@ window.ApiClient = (() => {
     getCategories: () => request('/api/v1/categories'),
     getSubjects: () => request('/api/v1/subjects'),
     getLanguages: () => request('/api/v1/languages'),
+    getConfig: () => request('/api/v1/config'),
     
     getBooks: (params = {}) => {
       const qs = new URLSearchParams(params).toString();
@@ -109,7 +110,10 @@ window.ApiClient = (() => {
     
     admin: {
       getAnalytics: () => request('/api/v1/admin/analytics/overview'),
+      getConfig: () => request('/api/v1/admin/config'),
+      updateConfig: (body) => request('/api/v1/admin/config', { method: 'PUT', body }),
       
+
       // Books
       getBooks: (params = {}) => {
         const qs = new URLSearchParams(params).toString();
@@ -205,7 +209,7 @@ window.ApiClient = (() => {
       deleteFlashcardSet: (bookId, setId) => request(`/api/v1/admin/flashcard-sets/${setId}`, { method: 'DELETE' }),
 
       // Categories & Subjects
-      getCategories: () => request('/api/v1/admin/categories'),
+      getCategories: (type = 'BOOK') => request(`/api/v1/admin/categories?type=${type}`),
       createCategory: (body) => request('/api/v1/admin/categories', { method: 'POST', body }),
       updateCategory: (id, body) => request(`/api/v1/admin/categories/${id}`, { method: 'PUT', body }),
       deleteCategory: (id) => request(`/api/v1/admin/categories/${id}`, { method: 'DELETE' }),

@@ -511,6 +511,19 @@ async function handleGetCourse(courseId, env) {
   const course = await env.DB.prepare('SELECT * FROM courses WHERE id = ?').bind(courseId).first();
   if (!course) throw { status: 404, code: 'NOT_FOUND', message: 'Course not found' };
   
+  // Fetch curriculum and categories
+  const [sections, lessons, cats, subs] = await Promise.all([
+    env.DB.prepare('SELECT * FROM course_sections WHERE course_id = ? ORDER BY display_order ASC').bind(courseId).all(),
+    env.DB.prepare('SELECT cl.* FROM course_lessons cl JOIN course_sections cs ON cl.section_id = cs.id WHERE cs.course_id = ? ORDER BY cl.display_order ASC').bind(courseId).all(),
+    env.DB.prepare('SELECT c.* FROM categories c JOIN course_categories bc ON c.id = bc.category_id WHERE bc.course_id = ?').bind(courseId).all(),
+    env.DB.prepare('SELECT s.* FROM subjects s JOIN course_subjects bs ON s.id = bs.subject_id WHERE bs.course_id = ?').bind(courseId).all()
+  ]);
+  
+  course.sections = sections.results || [];
+  course.lessons = lessons.results || [];
+  course.categories = cats.results || [];
+  course.subjects = subs.results || [];
+  
   return successResponse(course);
 }
 

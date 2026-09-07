@@ -183,10 +183,8 @@ import UserLayout from '../layouts/UserLayout.astro';
       
       // Fetch dynamic links
       try {
-        const res = await fetch('https://api.techilyfly.com/api/v1/config');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.data) {
+        const data = await ApiClient.getConfig();
+        if (data && data.success && data.data) {
             if (data.data.android_app_link) {
               androidBtn.href = data.data.android_app_link;
               androidBtn.style.display = 'flex';
@@ -200,7 +198,6 @@ import UserLayout from '../layouts/UserLayout.astro';
               iosBtn.style.display = 'none';
             }
           }
-        }
       } catch (e) {
         console.error('Failed to fetch app links', e);
       }

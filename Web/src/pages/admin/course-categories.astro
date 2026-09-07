@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
-<AdminLayout title="Book Categories & Subjects — Admin Panel">
+<AdminLayout title="Course Categories & Subjects — Admin Panel">
   <div id="admin-page-content-inner"></div>
   
   <script is:inline src="/js/pages/admin/categories.js"></script>
@@ -11,7 +11,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (typeof ApiClient !== 'undefined' && ApiClient.getAuthToken()) {
           clearInterval(checkAuth);
           if (window.AdminCategories) {
-            AdminCategories.render(document.getElementById('admin-page-content-inner'), 'BOOK');
+            AdminCategories.render(document.getElementById('admin-page-content-inner'), 'COURSE');
           }
         }
       }, 100);
